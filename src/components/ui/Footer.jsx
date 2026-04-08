@@ -9,14 +9,14 @@ export const Footer = () => {
 
             {/* Soft background glows */}
             <div className="absolute top-[-20%] left-[-10%] w-[40rem] h-[40rem] bg-blue-600 rounded-full mix-blend-screen filter blur-[120px] opacity-10 pointer-events-none"></div>
-            <div className="absolute bottom-[-10%] right-[-10%] w-[40rem] h-[40rem] bg-indigo-600 rounded-full mix-blend-screen filter blur-[120px] opacity-5 pointer-events-none"></div>
+            <div className="absolute bottom-[-10%] right-[-10%] w-[40rem] h-[40rem] bg-blue-600 rounded-full mix-blend-screen filter blur-[120px] opacity-5 pointer-events-none"></div>
 
             <div className="container mx-auto px-6 max-w-7xl relative z-10">
                 <div className="grid grid-cols-1 md:grid-cols-12 gap-10 lg:gap-12 mb-16">
                     {/* Left Section */}
                     <div className="md:col-span-4 lg:col-span-4 flex flex-col gap-6">
                         <div className="flex items-center gap-3">
-                            <div className="w-10 h-10 rounded-xl bg-white/10 backdrop-blur-md flex items-center justify-center border border-white/20 shadow-[0_4px_12px_rgba(0,0,0,0.5)]">
+                            <div className="w-10 h-10 rounded-2xl bg-white/10 backdrop-blur-md flex items-center justify-center border border-white/20 shadow-[0_4px_12px_rgba(0,0,0,0.5)]">
                                 <img src="/medconnect.png" alt="Logo" className="w-[22px] h-[22px] object-contain" style={{ filter: 'brightness(0) invert(1)' }} />
                             </div>
                             <span className="text-xl font-bold text-white tracking-tight">

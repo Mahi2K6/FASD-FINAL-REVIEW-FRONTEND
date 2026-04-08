@@ -1,19 +1,26 @@
 import React from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
-import { LandingPage } from './pages/Auth/LandingPage';
-import { AuthPage } from './pages/Auth/AuthPage';
-import { DashboardRouter } from './pages/Dashboard/DashboardRouter';
+import LandingPage from './pages/Auth/LandingPage';
+import AuthPage from './pages/Auth/AuthPage';
+import DashboardRouter from './pages/Dashboard/DashboardRouter';
 import { useAppContext } from './AppContext';
 
 const ProtectedRoute = ({ children }) => {
   const { currentUser } = useAppContext();
-  if (!currentUser) return <Navigate to="/login" replace />;
+  
+  if (!currentUser) {
+    const storedUser = localStorage.getItem("user");
+    if (!storedUser) {
+      return <Navigate to="/login" replace />;
+    }
+  }
+  
   return children;
 };
 
 import { AnimatePresence, motion } from 'framer-motion';
 import { useLocation } from 'react-router-dom';
-import { GlobalFooter } from './components/ui/GlobalFooter';
+import GlobalFooter from './components/ui/GlobalFooter';
 
 const PageTransition = ({ children }) => {
   return (
@@ -58,7 +65,13 @@ const AnimatedRoutes = () => {
     "/payment",
     "/profile",
     "/login",
-    "/register"
+    "/register",
+    "/auth",
+    "/admin-dashboard",
+    "/doctor-dashboard",
+    "/doctor-earnings",
+    "/pharmacist-dashboard",
+    "/patient-dashboard"
   ];
 
   const shouldShowFooter = !hideFooterRoutes.some(route =>
@@ -73,7 +86,43 @@ const AnimatedRoutes = () => {
             <Route path="/" element={<PageTransition><LandingPage /></PageTransition>} />
             <Route path="/login" element={<PageTransition><AuthPage defaultIsSignUp={false} /></PageTransition>} />
             <Route path="/register" element={<PageTransition><AuthPage defaultIsSignUp={true} /></PageTransition>} />
+            <Route path="/auth" element={<PageTransition><AuthPage defaultIsSignUp={false} /></PageTransition>} />
             <Route path="/dashboard/*" element={
+              <ProtectedRoute>
+                <PageTransition><DashboardRouter /></PageTransition>
+              </ProtectedRoute>
+            } />
+            <Route path="/admin-dashboard/*" element={
+              <ProtectedRoute>
+                <PageTransition><DashboardRouter /></PageTransition>
+              </ProtectedRoute>
+            } />
+            <Route path="/doctor-earnings/*" element={
+              <ProtectedRoute>
+                <PageTransition><DashboardRouter /></PageTransition>
+              </ProtectedRoute>
+            } />
+            <Route path="/patient-dashboard/*" element={
+              <ProtectedRoute>
+                <PageTransition><DashboardRouter /></PageTransition>
+              </ProtectedRoute>
+            } />
+            <Route path="/doctor-dashboard/*" element={
+              <ProtectedRoute>
+                <PageTransition><DashboardRouter /></PageTransition>
+              </ProtectedRoute>
+            } />
+            <Route path="/pharmacist-dashboard/*" element={
+              <ProtectedRoute>
+                <PageTransition><DashboardRouter /></PageTransition>
+              </ProtectedRoute>
+            } />
+            <Route path="/profile/*" element={
+              <ProtectedRoute>
+                <PageTransition><DashboardRouter /></PageTransition>
+              </ProtectedRoute>
+            } />
+            <Route path="/settings/*" element={
               <ProtectedRoute>
                 <PageTransition><DashboardRouter /></PageTransition>
               </ProtectedRoute>

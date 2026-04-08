@@ -1,302 +1,584 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { PillNav } from '../../components/ui/PillNav';
-import { GlassCard } from '../../components/ui/GlassCard';
-import { GlassButton } from '../../components/ui/GlassButton';
-import { GlassInput } from '../../components/ui/GlassInput';
+import { ShoppingBag, Search, Clock, Check, Package, Loader2, RefreshCw, Send, Activity, LayoutGrid, CheckCircle, Plus, Edit2, X, Save, AlertTriangle, Trash2 } from 'lucide-react';
 import { useAppContext } from '../../AppContext';
-import { ShoppingBag, Search, Clock, Check, LogOut, Package, Bell } from 'lucide-react';
-import { ParallaxWrapper } from '../../components/ui/ParallaxWrapper';
-import { FloatingAssistant } from '../../components/ui/FloatingAssistant';
-import { ProfileMenu } from '../../components/ui/ProfileMenu';
+import API from '../../api';
+import AppLayout from '../../components/layout/AppLayout';
+import Card from '../../components/ui/Card';
+import Button from '../../components/ui/Button';
+import StatCard from '../../components/ui/StatCard';
+import EmptyState from '../../components/ui/EmptyState';
+import Table from '../../components/ui/Table';
+import Modal from '../../components/ui/Modal';
+import { useToast } from '../../components/ui/ToastNotification';
 
-const tabs = [
-    { id: 'orders', label: 'Orders Feed', icon: ShoppingBag },
-    { id: 'inventory', label: 'Inventory', icon: Search },
-    { id: 'history', label: 'Order History', icon: Clock },
-];
-
-export const PharmacistDashboard = () => {
+const PharmacistDashboard = () => {
     const [activeTab, setActiveTab] = useState('orders');
-    const { currentUser, data, updateData, logout, setIsSearchGlobalVisible } = useAppContext();
+    const { currentUser, data, updateData, logout, loadingDb } = useAppContext();
+    const toast = useToast();
 
-    // Notifications
-    const myNotifications = data.notifications?.filter(n => n.userId === currentUser.id) || [];
-    const unreadCount = myNotifications.filter(n => !n.read).length;
-    const [showNotifications, setShowNotifications] = useState(false);
-    const [completedRxIds, setCompletedRxIds] = useState([]);
+    // Inventory Native State
+    const [inventory, setInventory] = useState([]);
+    const [inventoryLoading, setInventoryLoading] = useState(true);
+
+    // Edit functionality states
+    const [editingId, setEditingId] = useState(null);
+    const [editValues, setEditValues] = useState({});
+
+    // Add Modal form state
+    const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+    const [newMedicine, setNewMedicine] = useState({
+        name: '', quantity: 0, price: 0, unit: 'tablets', category: 'Other', minThreshold: 10
+    });
+
+    // Delete confirmation state
+    const [deleteConfirm, setDeleteConfirm] = useState({ open: false, id: null, name: '' });
+
+    // Submit loading state
+    const [submitting, setSubmitting] = useState(false);
+
+    // Reusable fetch function
+    const fetchInventory = async () => {
+        try {
+            setInventoryLoading(true);
+            const res = await API.get('/inventory');
+            console.log('Inventory loaded:', res.data?.length, 'items');
+            setInventory(Array.isArray(res.data) ? res.data : []);
+        } catch (err) {
+            console.error('Failed to fetch inventory', err);
+            toast.error('Error', 'Failed to load inventory.');
+        } finally {
+            setInventoryLoading(false);
+        }
+    };
 
     useEffect(() => {
-        if (!setIsSearchGlobalVisible) return;
-        const isSearchableTab = ['inventory', 'history'].includes(activeTab);
-        setIsSearchGlobalVisible(isSearchableTab);
-        return () => setIsSearchGlobalVisible(true);
-    }, [activeTab, setIsSearchGlobalVisible]);
+        fetchInventory();
+    }, []);
 
-    const pendingPrescriptions = data.prescriptions.filter(p => p.status === 'pending');
-    const readyPrescriptions = data.prescriptions.filter(p => p.status === 'ready');
+    if (loadingDb || !currentUser || !data || !data.prescriptions) {
+        return (
+            <AppLayout activeTab={activeTab} setActiveTab={setActiveTab}>
+                <div className="flex items-center justify-center h-64">
+                    <Loader2 size={32} className="text-[var(--color-primary)] animate-spin" />
+                </div>
+            </AppLayout>
+        );
+    }
 
-    const filteredInventory = [
-        { name: 'Amoxicillin 500mg', stock: 120, price: '₹950' },
-        { name: 'Ibuprofen 400mg', stock: 350, price: '₹680' },
-        { name: 'Lisinopril 10mg', stock: 15, price: '₹1200' },
-        { name: 'Azithromycin 250mg', stock: 0, price: '₹1750' },
-        { name: 'Metformin 500mg', stock: 210, price: '₹800' }
-    ];
+    // Pending approval guard
+    if (currentUser?.status === 'pending') {
+        return (
+            <AppLayout activeTab={activeTab} setActiveTab={setActiveTab}>
+                <div className="flex items-center justify-center h-[60vh]">
+                    <Card className="max-w-md text-center">
+                        <div className="w-16 h-16 bg-amber-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                            <Clock size={28} className="text-amber-600" />
+                        </div>
+                        <h2 className="text-xl font-bold text-slate-800 tracking-tight mb-2">Account Under Review</h2>
+                        <p className="text-sm text-[var(--color-text-secondary)] mb-6">
+                            Your pharmacy credentials are being verified by an admin. You'll be granted access once approved.
+                        </p>
+                        <Button variant="secondary" onClick={logout} className="w-full">Log Out</Button>
+                    </Card>
+                </div>
+            </AppLayout>
+        );
+    }
+
+    const enrichedPrescriptions = useMemo(() => {
+        return (data.prescriptions || []).map(p => {
+            const patient = (data.users || []).find(u => u.id === p.patientId);
+            const doctor = (data.doctors || []).find(d => d.id === p.doctorId);
+            return {
+                ...p,
+                patientName: patient ? patient.name : (p.patientName || `Patient #${p.patientId}`),
+                doctorName: doctor ? doctor.name : (p.doctorName || `Doctor #${p.doctorId}`),
+            };
+        });
+    }, [data.prescriptions, data.users, data.doctors]);
+
+    const pendingPrescriptions = enrichedPrescriptions.filter(p => p.status === 'pending');
+    const readyPrescriptions = enrichedPrescriptions.filter(p => p.status === 'ready');
+    const dispensedPrescriptions = enrichedPrescriptions.filter(p => p.status === 'dispensed');
+
+    const lowStockCount = inventory.filter(i => i.quantity <= i.minThreshold).length;
+    const totalMedicines = inventory.length;
+    const totalValue = inventory.reduce((sum, i) => sum + ((i.price || 0) * (i.quantity || 0)), 0);
 
     const handleMarkReady = (rxId) => {
-        const updated = data.prescriptions.map(p =>
+        const updated = (data.prescriptions || []).map(p =>
             p.id === rxId ? { ...p, status: 'ready' } : p
         );
         updateData('prescriptions', updated);
+        API.put(`/prescriptions/${rxId}/notes`, { notes: 'status:ready' })
+          .catch(err => console.error('Mark ready error:', err));
+    };
+
+    const handleMarkDispensed = (rxId) => {
+        const updated = (data.prescriptions || []).map(p =>
+            p.id === rxId ? { ...p, status: 'dispensed' } : p
+        );
+        updateData('prescriptions', updated);
+        API.put(`/prescriptions/${rxId}/notes`, { notes: 'status:dispensed' })
+          .catch(err => console.error('Mark dispensed error:', err));
+    };
+
+    const renderMedicines = (meds) => {
+        let medList = meds;
+        if (typeof meds === 'string') medList = meds.split(',');
+        if (!Array.isArray(medList)) return null;
+        return medList.map((m, i) => {
+            const name = typeof m === 'object' ? m.name : m.trim();
+            const dosage = typeof m === 'object' ? m.dosage : null;
+            return (
+                <span key={i} className="text-[10px] font-bold uppercase tracking-widest bg-emerald-50 text-emerald-700 px-2 py-1 rounded-md border border-emerald-100 flex items-center gap-1 shrink-0">
+                    <Activity size={10} className="opacity-50" />
+                    {name} {dosage && <span className="opacity-60 font-medium ml-0.5">{dosage}</span>}
+                </span>
+            );
+        });
+    };
+
+    const handleSaveEdit = async (id) => {
+        try {
+            const dataToUpdate = {
+                quantity: Number(editValues.quantity),
+                price: Number(editValues.price),
+                minThreshold: Number(editValues.minThreshold)
+            };
+            await API.put(`/inventory/${id}`, dataToUpdate);
+            setEditingId(null);
+            toast.success('Updated', 'Inventory updated successfully.');
+            await fetchInventory();
+        } catch (err) {
+            console.error('Update error:', err.response?.data);
+            const errorMsg = typeof err.response?.data === 'string'
+                ? err.response.data
+                : err.response?.data?.message || 'Failed to update inventory.';
+            toast.error('Error', errorMsg);
+        }
+    };
+
+    const handleDeleteMedicine = async (id) => {
+        try {
+            await API.delete(`/inventory/${id}`);
+            toast.success('Deleted', 'Medicine removed from inventory.');
+            setDeleteConfirm({ open: false, id: null, name: '' });
+            await fetchInventory();
+        } catch (err) {
+            console.error('Delete error:', err.response?.data);
+            const errorMsg = typeof err.response?.data === 'string'
+                ? err.response.data
+                : err.response?.data?.message || 'Failed to delete medicine.';
+            toast.error('Error', errorMsg);
+        }
+    };
+
+    const handleAddMedicine = async (e) => {
+        e.preventDefault();
+
+        // RAW STATE DUMP — see exactly what React state holds
+        console.log('=== RAW newMedicine STATE ===', JSON.stringify(newMedicine));
+        console.log('name type:', typeof newMedicine.name, '| value:', `"${newMedicine.name}"`);
+        console.log('quantity type:', typeof newMedicine.quantity, '| value:', newMedicine.quantity);
+        console.log('price type:', typeof newMedicine.price, '| value:', newMedicine.price);
+
+        const trimmedName = (newMedicine.name || '').trim();
+        const qty = Number(newMedicine.quantity) || 0;
+        const prc = Number(newMedicine.price) || 0;
+
+        // Strict client-side validation
+        if (!trimmedName || trimmedName === '') {
+            toast.error('Validation', 'Medicine name is required.');
+            return;
+        }
+        if (qty <= 0) {
+            toast.error('Validation', 'Quantity must be greater than 0.');
+            return;
+        }
+        if (prc <= 0) {
+            toast.error('Validation', 'Price must be greater than 0.');
+            return;
+        }
+
+        const payload = {
+            name: trimmedName,
+            quantity: qty,
+            price: prc,
+            unit: (newMedicine.unit || 'tablets').trim(),
+            category: newMedicine.category || 'Other',
+            minThreshold: Number(newMedicine.minThreshold) || 10
+        };
+
+        console.log('FINAL PAYLOAD:', JSON.stringify(payload));
+
+        setSubmitting(true);
+        try {
+            const res = await API.post('/inventory', payload);
+            console.log("=== SUCCESS RESPONSE ===", res.data);
+            setIsAddModalOpen(false);
+            setNewMedicine({ name: '', quantity: 0, price: 0, unit: 'tablets', category: 'Other', minThreshold: 10 });
+            toast.success('Added', 'Medicine added successfully.');
+            await fetchInventory();
+        } catch (err) {
+            console.error("=== ADD MEDICINE ERROR ===");
+            console.error("Status:", err.response?.status);
+            console.error("Response data:", err.response?.data);
+
+            const errorMsg = typeof err.response?.data === 'string'
+                ? err.response.data
+                : err.response?.data?.message || err.message || 'Failed to add medicine.';
+            toast.error('Error', errorMsg);
+        } finally {
+            setSubmitting(false);
+        }
     };
 
     return (
-        <main className="main-content w-full flex-1 bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-100 relative overflow-x-hidden flex flex-col items-center p-4 after:absolute after:inset-0 after:bg-[radial-gradient(circle_at_top,_rgba(255,255,255,0.6),transparent_60%)] after:pointer-events-none">
-            {/* Background blobs with Parallax */}
-            <div className="fixed inset-0 pointer-events-none z-0">
-                <ParallaxWrapper depth={1}>
-                    <div className="absolute top-[-10%] right-[-10%] w-96 h-96 bg-blue-200 rounded-full mix-blend-multiply filter blur-3xl opacity-30 animate-blob" />
-                </ParallaxWrapper>
-                <ParallaxWrapper depth={1.2}>
-                    <div className="absolute bottom-[-10%] left-[-10%] w-96 h-96 bg-indigo-200 rounded-full mix-blend-multiply filter blur-3xl opacity-30 animate-blob" />
-                </ParallaxWrapper>
+        <AppLayout activeTab={activeTab} setActiveTab={setActiveTab}>
+            {/* ─── GLOBAL STATS ─── */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+                <StatCard title="Total Medicines" value={totalMedicines} icon={Package} color="from-blue-500 to-indigo-600" />
+                <StatCard title="Low Stock ⚠️" value={lowStockCount} icon={AlertTriangle} color="from-rose-400 to-red-500" />
+                <StatCard title="Total Stock Value" value={`₹${totalValue.toLocaleString()}`} icon={Activity} color="from-emerald-400 to-teal-500" />
+                <StatCard title="Pending Rx" value={pendingPrescriptions.length} icon={Clock} color="from-amber-400 to-orange-500" />
             </div>
 
-            {/* Top Header */}
-            <header className="top-header">
-                <div className="logo-area hidden sm:flex">
-                    <img src="/medconnect.png" alt="MedConnect Logo" className="drop-shadow-sm" />
-                    <div className="flex flex-col">
-                        <h1 className="logo-title text-slate-800 leading-none mb-[2px]">
-                            <span className="bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent">MEDCONNECT</span>
-                        </h1>
-                        <span className="logo-subtitle text-slate-500 uppercase tracking-widest leading-none">Smart Healthcare</span>
-                    </div>
-                </div>
+            <AnimatePresence mode="wait">
+                {/* ─── ORDERS FEED ─── */}
+                {activeTab === 'orders' && (
+                    <motion.div key="orders" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="space-y-6">
+                        <div className="flex items-center justify-between">
+                            <h2 className="text-xl font-bold text-slate-800 tracking-tight">Rx Kanban Board</h2>
+                        </div>
 
-                {/* Navigation Pill */}
-                <PillNav tabs={tabs} activeTab={activeTab} setActiveTab={setActiveTab} className="nav-pill" />
-
-                <div className="profile-area">
-                    {/* User Info Right Side */}
-                    <div className="hidden md:flex flex-col items-end mr-2">
-                        <span className="text-sm font-semibold text-slate-800">Hello, {currentUser?.name?.split(' ')[0] || 'Pharmacist'}</span>
-                        <span className="text-[10px] font-medium text-slate-500 uppercase tracking-widest leading-none mt-1">Pharmacist Portal</span>
-                    </div>
-
-                    <div className="relative pointer-events-auto">
-                        <button onClick={() => setShowNotifications(!showNotifications)} className="relative p-2 bg-white/50 backdrop-blur-md rounded-full text-slate-500 hover:text-blue-600 hover:shadow-md border border-white/60 transition-all duration-300">
-                            <Bell size={20} />
-                            {unreadCount > 0 && <span className="absolute top-1 right-1 w-2.5 h-2.5 bg-red-500 rounded-full border-2 border-white animate-pulse"></span>}
-                        </button>
-
-                        <AnimatePresence>
-                            {showNotifications && (
-                                <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95 }} className="absolute right-0 mt-3 w-80 bg-white/95 backdrop-blur-xl border border-slate-100 shadow-[0_20px_60px_rgba(0,0,0,0.15)] rounded-[32px] p-4 z-50">
-                                    <div className="flex items-center justify-between mb-3">
-                                        <h4 className="font-semibold text-slate-800 flex items-center gap-2"><Bell size={16} className="text-blue-600" /> Notifications</h4>
-                                        {unreadCount > 0 && <span className="text-xs font-semibold bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full">{unreadCount} New</span>}
-                                    </div>
-                                    <div className="space-y-2 max-h-72 overflow-y-auto pr-1">
-                                        {myNotifications.length === 0 ? (
-                                            <p className="text-sm text-slate-500 text-center py-4">No new notifications</p>
-                                        ) : (
-                                            myNotifications.map(notif => (
-                                                <div key={notif.id} className={`p-3 text-sm rounded-[28px] border transition-colors ${notif.read ? 'bg-slate-50 border-slate-100 text-slate-600' : 'bg-blue-50 border-blue-100 text-blue-800'}`}>
-                                                    <div className="font-semibold mb-0.5">{notif.title}</div>
-                                                    <div>{notif.message}</div>
-                                                    <div className="text-xs mt-1 opacity-60 font-medium">{notif.time}</div>
-                                                </div>
-                                            ))
-                                        )}
-                                    </div>
-                                </motion.div>
-                            )}
-                        </AnimatePresence>
-                    </div>
-
-                    <ProfileMenu />
-                </div>
-            </header>
-
-            {/* Main Content Area */}
-            <div className="w-full max-w-6xl z-10 flex-1 flex flex-col pointer-events-auto">
-                <AnimatePresence mode="wait">
-
-                    {/* ORDERS FEED */}
-                    {activeTab === 'orders' && (
-                        <motion.div key="orders" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }}>
-                            <GlassCard className="p-6">
-                                <div className="flex justify-between items-center mb-6">
-                                    <h3 className="text-xl font-bold text-slate-800 flex items-center gap-3">
-                                        <ShoppingBag className="text-blue-600" /> Live Prescription Feed
+                        {/* Kanban Grid */}
+                        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6 items-start">
+                            
+                            {/* Column 1: Pending */}
+                            <div className="flex flex-col gap-4">
+                                <div className="flex items-center justify-between pb-3 border-b-2 border-amber-200">
+                                    <h3 className="font-bold text-amber-700 flex items-center gap-2 uppercase tracking-wide text-sm">
+                                        <Clock size={16} /> Pending Fulfillment
                                     </h3>
-                                    <span className="bg-blue-100 text-blue-800 text-xs font-bold px-3 py-1 rounded-full flex items-center gap-2">
-                                        <span className="w-2 h-2 rounded-full bg-blue-500 animate-pulse" />
-                                        Live Updates
-                                    </span>
+                                    <span className="text-xs font-bold bg-amber-100 text-amber-700 px-2.5 py-1 rounded-full">{pendingPrescriptions.length}</span>
                                 </div>
-
                                 {pendingPrescriptions.length === 0 ? (
-                                    <div className="text-center py-16 text-slate-500">
-                                        <Package size={48} className="mx-auto mb-4 text-slate-300" />
-                                        <p>No pending prescription orders right now.</p>
-                                    </div>
+                                    <EmptyState icon={LayoutGrid} title="Clear Queue" description="No prescriptions pending." />
                                 ) : (
-                                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                                        {pendingPrescriptions.map((rx) => (
-                                            <div key={rx.id} className="p-5 bg-white/60 rounded-[28px] border border-slate-200 shadow-sm flex flex-col hover:shadow-md transition-shadow">
-                                                <div className="flex justify-between items-start mb-4">
-                                                    <div>
-                                                        <span className="text-xs font-semibold text-blue-600 bg-blue-50 px-2 py-1 rounded">NEW ORDER</span>
-                                                        <h4 className="font-bold text-slate-800 mt-2">{rx.patientName}</h4>
-                                                        <p className="text-xs text-slate-500 mt-1">Prescribed by Dr. {rx.doctorName}</p>
+                                    <div className="space-y-3">
+                                        <AnimatePresence>
+                                            {pendingPrescriptions.map((rx) => (
+                                                <motion.div layout initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }} key={rx.id} className="bg-white/80 backdrop-blur-xl border border-white/40 shadow-sm hover:shadow-md transition-all rounded-3xl p-5 group flex flex-col gap-4 relative overflow-hidden">
+                                                    <div className="absolute top-0 left-0 w-1.5 h-full bg-amber-400"></div>
+                                                    <div className="flex items-start justify-between">
+                                                        <div>
+                                                            <div className="text-[10px] font-bold uppercase tracking-widest text-slate-400 mb-1">Rx #{rx.id}</div>
+                                                            <h4 className="font-bold text-slate-800">{rx.patientName || 'Unknown Patient'}</h4>
+                                                            <p className="text-xs font-medium text-slate-500 mt-0.5">Dr. {rx.doctorName || 'Unknown'}</p>
+                                                        </div>
                                                     </div>
-                                                    <span className="text-xs font-mono text-slate-400 font-semibold">Order #{rx.id.slice(-6)}</span>
-                                                </div>
-
-                                                <div className="bg-slate-50 rounded-[24px] p-4 mb-4 flex-1 border border-slate-100">
-                                                    <h5 className="text-xs font-semibold text-slate-500 mb-2 uppercase tracking-wider">Medications</h5>
-                                                    <ul className="space-y-2">
-                                                        {rx.medicines.map((m, idx) => (
-                                                            <li key={idx} className="flex justify-between text-sm">
-                                                                <span className="font-medium text-slate-800">• {m.name}</span>
-                                                                <span className="text-slate-600 font-mono text-xs bg-slate-200 px-2 py-0.5 rounded">{m.quantity}x</span>
-                                                            </li>
-                                                        ))}
-                                                    </ul>
-                                                </div>
-
-                                                <motion.div layout>
-                                                    <GlassButton
-                                                        onClick={() => {
-                                                            setCompletedRxIds(prev => [...prev, rx.id]);
-                                                            setTimeout(() => handleMarkReady(rx.id), 800);
-                                                        }}
-                                                        disabled={completedRxIds.includes(rx.id)}
-                                                        className={`w-full font-semibold py-3 overflow-hidden relative border-0 ${completedRxIds.includes(rx.id) ? 'bg-emerald-500 text-white shadow-sm' : 'bg-blue-600 hover:bg-blue-700 text-white shadow-md shadow-blue-500/20'}`}
-                                                    >
-                                                        <AnimatePresence mode="wait">
-                                                            {completedRxIds.includes(rx.id) ? (
-                                                                <motion.div
-                                                                    key="success"
-                                                                    initial={{ y: 20, opacity: 0 }}
-                                                                    animate={{ y: 0, opacity: 1 }}
-                                                                    className="flex items-center justify-center gap-2"
-                                                                >
-                                                                    <Check size={20} className="text-white" />
-                                                                    <span>Ready for Pickup</span>
-                                                                </motion.div>
-                                                            ) : (
-                                                                <motion.div
-                                                                    key="default"
-                                                                    initial={{ y: -20, opacity: 0 }}
-                                                                    animate={{ y: 0, opacity: 1 }}
-                                                                    exit={{ y: 20, opacity: 0 }}
-                                                                    className="flex items-center justify-center"
-                                                                >
-                                                                    Mark as Ready for Pickup <Check size={18} className="ml-2" />
-                                                                </motion.div>
-                                                            )}
-                                                        </AnimatePresence>
-                                                    </GlassButton>
+                                                    <div className="flex flex-wrap gap-1.5">
+                                                        {renderMedicines(rx.medicines)}
+                                                    </div>
+                                                    <div className="pt-3 border-t border-slate-100 flex justify-end">
+                                                        <Button size="sm" icon={RefreshCw} onClick={() => handleMarkReady(rx.id)} className="w-full justify-center !rounded-xl bg-amber-50 text-amber-700 hover:bg-amber-100 border-0">
+                                                            Process Order
+                                                        </Button>
+                                                    </div>
                                                 </motion.div>
-                                            </div>
-                                        ))}
-                                    </div>
-                                )}
-                            </GlassCard>
-                        </motion.div>
-                    )}
-
-                    {/* INVENTORY */}
-                    {activeTab === 'inventory' && (
-                        <motion.div key="inventory" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }}>
-                            <GlassCard className="p-6">
-                                <div className="mb-6 relative">
-                                    {/* Search has been moved to FloatingSearch */}
-                                </div>
-
-                                <div className="overflow-x-auto">
-                                    <table className="w-full text-left border-collapse">
-                                        <thead>
-                                            <tr className="border-b border-slate-200">
-                                                <th className="py-3 px-4 text-sm font-semibold text-slate-500">Medicine Name</th>
-                                                <th className="py-3 px-4 text-sm font-semibold text-slate-500">Stock Level</th>
-                                                <th className="py-3 px-4 text-sm font-semibold text-slate-500">Price</th>
-                                                <th className="py-3 px-4 text-sm font-semibold text-slate-500">Status</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody>
-                                            {filteredInventory.map((item, idx) => (
-                                                <tr key={idx} className="border-b border-slate-100 last:border-0 hover:bg-white/40 transition-colors">
-                                                    <td className="py-3 px-4 text-sm font-medium text-slate-700">{item.name}</td>
-                                                    <td className="py-3 px-4 text-sm text-slate-600 font-mono">{item.stock} Units</td>
-                                                    <td className="py-3 px-4 text-sm text-slate-600 font-mono">{item.price}</td>
-                                                    <td className="py-3 px-4 text-sm flex items-center gap-2">
-                                                        {item.stock === 0 ? (
-                                                            <span className="inline-flex px-2 py-1 rounded-full text-xs font-medium bg-red-100 text-red-700 border border-red-200 shadow-sm"><span className="mr-1">🔴</span> Out of Stock</span>
-                                                        ) : item.stock < 50 ? (
-                                                            <span className="inline-flex px-2 py-1 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800 border border-yellow-200 shadow-sm"><span className="mr-1">🟡</span> Low Stock</span>
-                                                        ) : (
-                                                            <span className="inline-flex px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-700 border border-green-200 shadow-sm"><span className="mr-1">🟢</span> In Stock</span>
-                                                        )}
-                                                    </td>
-                                                </tr>
                                             ))}
-                                            {filteredInventory.length === 0 && (
-                                                <tr>
-                                                    <td colSpan="4" className="py-8 text-center text-slate-500">No inventory matching your search.</td>
-                                                </tr>
-                                            )}
-                                        </tbody>
-                                    </table>
-                                </div>
-                            </GlassCard>
-                        </motion.div>
-                    )}
-
-                    {/* HISTORY */}
-                    {activeTab === 'history' && (
-                        <motion.div key="history" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }}>
-                            <GlassCard className="p-6">
-                                <h3 className="text-xl font-bold text-slate-800 mb-6 flex items-center gap-3">
-                                    <Clock className="text-blue-600" /> Fulfilled Orders
-                                </h3>
-
-                                {readyPrescriptions.length === 0 ? (
-                                    <div className="text-center py-12 text-slate-500">
-                                        <p>No fulfilled orders yet.</p>
-                                    </div>
-                                ) : (
-                                    <div className="space-y-4">
-                                        {readyPrescriptions.map((rx) => (
-                                            <div key={rx.id} className="p-4 bg-white/60 rounded-[28px] border border-slate-200 shadow-sm flex items-center justify-between">
-                                                <div>
-                                                    <div className="flex items-center gap-2 mb-1">
-                                                        <span className="text-xs font-mono font-semibold text-slate-400">#{rx.id.slice(-6)}</span>
-                                                        <span className="text-xs bg-slate-100 border border-slate-200 text-slate-600 px-2 rounded-full hidden sm:inline-block">Patient: {rx.patientName}</span>
-                                                    </div>
-                                                    <p className="text-sm font-medium text-slate-700">
-                                                        {rx.medicines.map(m => m.name).join(', ')}
-                                                    </p>
-                                                </div>
-                                                <span className="text-[10px] font-bold tracking-wider uppercase bg-emerald-50 text-emerald-600 border border-emerald-100 px-3 py-1.5 rounded-full shadow-sm">
-                                                    Ready for Pickup
-                                                </span>
-                                            </div>
-                                        ))}
+                                        </AnimatePresence>
                                     </div>
                                 )}
-                            </GlassCard>
-                        </motion.div>
-                    )}
+                            </div>
 
-                </AnimatePresence>
-            </div>
+                            {/* Column 2: Ready */}
+                            <div className="flex flex-col gap-4">
+                                <div className="flex items-center justify-between pb-3 border-b-2 border-emerald-200">
+                                    <h3 className="font-bold text-emerald-700 flex items-center gap-2 uppercase tracking-wide text-sm">
+                                        <Check size={16} /> Ready for Pickup
+                                    </h3>
+                                    <span className="text-xs font-bold bg-emerald-100 text-emerald-700 px-2.5 py-1 rounded-full">{readyPrescriptions.length}</span>
+                                </div>
+                                {readyPrescriptions.length === 0 ? (
+                                    <EmptyState icon={Package} title="No packages ready" description="Processed orders will appear here." />
+                                ) : (
+                                    <div className="space-y-3">
+                                        <AnimatePresence>
+                                            {readyPrescriptions.map((rx) => (
+                                                <motion.div layout initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }} key={rx.id} className="bg-white/80 backdrop-blur-xl border border-white/40 shadow-sm hover:shadow-md transition-all rounded-3xl p-5 group flex flex-col gap-4 relative overflow-hidden">
+                                                    <div className="absolute top-0 left-0 w-1.5 h-full bg-emerald-400"></div>
+                                                    <div className="flex items-start justify-between">
+                                                        <div>
+                                                            <div className="text-[10px] font-bold uppercase tracking-widest text-slate-400 mb-1">Rx #{rx.id}</div>
+                                                            <h4 className="font-bold text-slate-800">{rx.patientName || 'Unknown Patient'}</h4>
+                                                        </div>
+                                                    </div>
+                                                    <div className="flex flex-wrap gap-1.5 opacity-60 grayscale">
+                                                        {renderMedicines(rx.medicines)}
+                                                    </div>
+                                                    <div className="pt-3 border-t border-slate-100 flex justify-end">
+                                                        <Button size="sm" icon={Send} onClick={() => handleMarkDispensed(rx.id)} className="w-full justify-center !rounded-xl bg-emerald-500 text-white hover:bg-emerald-600 border-0 shadow-emerald-200 shadow-sm">
+                                                            Handover & Dispense
+                                                        </Button>
+                                                    </div>
+                                                </motion.div>
+                                            ))}
+                                        </AnimatePresence>
+                                    </div>
+                                )}
+                            </div>
 
-            <FloatingAssistant />
-        </main>
+                            {/* Column 3: Dispensed */}
+                            <div className="flex flex-col gap-4">
+                                <div className="flex items-center justify-between pb-3 border-b-2 border-slate-200">
+                                    <h3 className="font-bold text-slate-600 flex items-center gap-2 uppercase tracking-wide text-sm">
+                                        <CheckCircle size={16} /> Dispensed
+                                    </h3>
+                                    <span className="text-xs font-bold bg-slate-100 text-slate-600 px-2.5 py-1 rounded-full">{dispensedPrescriptions.length}</span>
+                                </div>
+                                {dispensedPrescriptions.length === 0 ? (
+                                    <EmptyState icon={ShoppingBag} title="No recent dispensations" description="Completed pickups land here." />
+                                ) : (
+                                    <div className="space-y-3">
+                                        <AnimatePresence>
+                                            {dispensedPrescriptions.slice(0, 15).map((rx) => (
+                                                <motion.div layout initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }} key={rx.id} className="bg-slate-50/50 backdrop-blur-xl border border-slate-100 rounded-3xl p-5 flex flex-col gap-3 relative overflow-hidden">
+                                                    <div className="absolute top-0 right-0 p-4 opacity-5 pointer-events-none">
+                                                        <CheckCircle size={64} />
+                                                    </div>
+                                                    <div className="flex items-start justify-between">
+                                                        <div>
+                                                            <div className="text-[10px] font-bold uppercase tracking-widest text-slate-400 mb-1">Rx #{rx.id}</div>
+                                                            <h4 className="font-bold text-slate-500 line-through">{rx.patientName || 'Unknown Patient'}</h4>
+                                                        </div>
+                                                        <span className="text-[10px] font-bold text-slate-400 border border-slate-200 rounded px-1.5 py-0.5 uppercase">Done</span>
+                                                    </div>
+                                                </motion.div>
+                                            ))}
+                                        </AnimatePresence>
+                                    </div>
+                                )}
+                            </div>
+                            
+                        </div>
+
+                    </motion.div>
+                )}
+
+                {/* ─── INVENTORY TAB ─── */}
+                {activeTab === 'inventory' && (
+                    <motion.div key="inventory" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="space-y-6">
+                        <div className="flex items-center justify-between">
+                            <h2 className="text-xl font-bold text-slate-800 tracking-tight">Inventory Intelligence</h2>
+                            <Button icon={Plus} onClick={() => setIsAddModalOpen(true)}>Add Medicine</Button>
+                        </div>
+                        
+                        {inventoryLoading ? (
+                            <div className="flex justify-center p-10"><Loader2 className="animate-spin text-slate-400" /></div>
+                        ) : inventory.length === 0 ? (
+                            <EmptyState icon={Package} title="No Inventory Found" description="Add your first medicine to manage stock." />
+                        ) : (
+                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
+                                {inventory.map(item => {
+                                    const isEditing = editingId === item.id;
+                                    const qty = item.quantity || 0;
+                                    const threshold = item.minThreshold || 10;
+                                    
+                                    const pctRaw = (qty / (qty + threshold)) * 100;
+                                    const pct = Math.min(100, Math.max(0, isNaN(pctRaw) ? 0 : pctRaw));
+                                    
+                                    const isLow = qty <= threshold;
+                                    const isWarning = qty > threshold && qty <= threshold * 2;
+                                    const isGood = qty > threshold * 2;
+                                    
+                                    let colorClass = 'bg-emerald-400';
+                                    let textColor = 'text-emerald-500';
+                                    if (isLow) {
+                                        colorClass = 'bg-red-400 animate-pulse';
+                                        textColor = 'text-red-500';
+                                    } else if (isWarning) {
+                                        colorClass = 'bg-amber-400';
+                                        textColor = 'text-amber-500';
+                                    }
+
+                                    const categoryMap = {
+                                        'Antibiotic': 'bg-purple-50 text-purple-700 ring-1 ring-purple-200',
+                                        'Painkiller': 'bg-orange-50 text-orange-700 ring-1 ring-orange-200',
+                                        'Diabetes': 'bg-sky-50 text-sky-700 ring-1 ring-sky-200',
+                                        'Cardiac': 'bg-red-50 text-red-700 ring-1 ring-red-200',
+                                        'Gastric': 'bg-teal-50 text-teal-700 ring-1 ring-teal-200',
+                                        'Antihistamine': 'bg-yellow-50 text-yellow-700 ring-1 ring-yellow-200',
+                                        'Other': 'bg-slate-50 text-slate-700 ring-1 ring-slate-200'
+                                    };
+                                    
+                                    const catClass = categoryMap[item.category] || categoryMap['Other'];
+
+                                    return (
+                                        <motion.div layout initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} key={item.id} className="bg-white rounded-2xl p-4 border border-[rgba(0,0,0,0.06)] shadow-[0_2px_8px_rgba(0,0,0,0.05)] hover:shadow-md hover:-translate-y-[2px] transition-all duration-200 flex flex-col justify-between h-full relative group">
+                                            <div>
+                                                <div className="flex items-center justify-between mb-3">
+                                                    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold ${catClass}`}>{item.category || 'Other'}</span>
+                                                    {!isEditing && (
+                                                        <span className="flex items-baseline gap-0.5">
+                                                            <span className="text-slate-400 text-xs">₹</span>
+                                                            <span className="font-bold text-slate-800 tabular-nums text-sm">{item.price}</span>
+                                                        </span>
+                                                    )}
+                                                </div>
+                                                <h4 className="font-bold text-slate-800 text-base leading-tight mb-4">{item.name}</h4>
+                                            </div>
+
+                                            {isEditing ? (
+                                                <div className="space-y-3 mt-2 bg-slate-50 p-3 rounded-xl border border-slate-200 shadow-[inset_0_2px_4px_rgba(0,0,0,0.02)]">
+                                                    <div className="grid grid-cols-2 gap-2">
+                                                        <div>
+                                                            <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest block mb-1">Qty</label>
+                                                            <input type="number" min="0" className="w-full bg-white border border-slate-200 rounded-md px-2 py-1 text-sm font-bold" value={editValues.quantity} onChange={(e)=>setEditValues({...editValues, quantity: e.target.value})} />
+                                                        </div>
+                                                        <div>
+                                                            <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest block mb-1">Price</label>
+                                                            <input type="number" step="0.01" className="w-full bg-white border border-slate-200 rounded-md px-2 py-1 text-sm font-bold" value={editValues.price} onChange={(e)=>setEditValues({...editValues, price: e.target.value})} />
+                                                        </div>
+                                                        <div className="col-span-2">
+                                                            <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest block mb-1">Min Threshold</label>
+                                                            <input type="number" min="0" className="w-full bg-white border border-slate-200 rounded-md px-2 py-1 text-sm font-bold" value={editValues.minThreshold} onChange={(e)=>setEditValues({...editValues, minThreshold: e.target.value})} />
+                                                        </div>
+                                                    </div>
+                                                    <div className="flex gap-2 pt-2">
+                                                        <Button size="sm" variant="danger" icon={X} onClick={() => setEditingId(null)} className="flex-1 justify-center !py-1">Cancel</Button>
+                                                        <Button size="sm" icon={Save} onClick={() => handleSaveEdit(item.id)} className="flex-1 justify-center !py-1">Save</Button>
+                                                    </div>
+                                                </div>
+                                            ) : (
+                                                <div className="mt-4">
+                                                    <div className="flex items-end justify-between mb-2">
+                                                        <div>
+                                                            <span className={`text-xl font-bold tabular-nums ${textColor}`}>{qty} <span className="text-[10px] text-slate-400 uppercase tracking-widest ml-0.5">Left</span></span>
+                                                            {isLow && <p className="text-[10px] font-bold text-red-500 mt-1 uppercase tracking-widest flex items-center gap-1"><AlertTriangle size={10} /> Low Stock</p>}
+                                                        </div>
+                                                        <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                            <button onClick={() => {
+                                                                setEditingId(item.id);
+                                                                setEditValues({ quantity: item.quantity, price: item.price, minThreshold: item.minThreshold });
+                                                            }} className="text-slate-400 hover:text-blue-500 transition-colors p-1 bg-slate-100 rounded-md">
+                                                                <Edit2 size={14} />
+                                                            </button>
+                                                            <button onClick={() => setDeleteConfirm({ open: true, id: item.id, name: item.name })} className="text-slate-400 hover:text-red-500 transition-colors p-1 bg-slate-100 rounded-md">
+                                                                <Trash2 size={14} />
+                                                            </button>
+                                                        </div>
+                                                    </div>
+                                                    <div className="bg-slate-100 rounded-full h-1.5 w-full overflow-hidden">
+                                                        <div className={`h-1.5 rounded-full transition-all duration-500 ${colorClass}`} style={{ width: `${pct}%` }}></div>
+                                                    </div>
+                                                </div>
+                                            )}
+                                        </motion.div>
+                                    );
+                                })}
+                            </div>
+                        )}
+                    </motion.div>
+                )}
+
+                {/* ─── HISTORY TAB ─── */}
+                {activeTab === 'history' && (
+                    <motion.div key="history" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="space-y-6">
+                        <h2 className="text-xl font-bold text-slate-800 tracking-tight">Order History</h2>
+                        <Card className="!p-0 overflow-hidden">
+                            <Table
+                                columns={[
+                                    { header: 'Order', render: (row) => <span className="font-medium text-[var(--color-text-primary)]">#{row.id}</span> },
+                                    { header: 'Patient', accessor: 'patientName' },
+                                    { header: 'Doctor', accessor: 'doctorName' },
+                                    { header: 'Status', render: (row) => (
+                                        <span className={`text-xs font-medium px-2 py-1 rounded-full ${
+                                            row.status === 'ready' ? 'bg-emerald-50 text-emerald-600' :
+                                            row.status === 'pending' ? 'bg-amber-50 text-amber-600' :
+                                            'bg-white/40 border border-white/20 text-[var(--color-text-secondary)] backdrop-blur-md'
+                                        }`}>
+                                            {row.status}
+                                        </span>
+                                    )},
+                                    { header: 'Date', accessor: 'date' },
+                                ]}
+                                data={data.prescriptions || []}
+                                emptyMessage="No order history"
+                                emptyIcon={Clock}
+                            />
+                        </Card>
+                    </motion.div>
+                )}
+            </AnimatePresence>
+
+            {/* ─── ADD MEDICINE MODAL ─── */}
+            <Modal isOpen={isAddModalOpen} onClose={() => setIsAddModalOpen(false)} title="Add New Medicine">
+                <form onSubmit={handleAddMedicine} className="space-y-4">
+                    <div>
+                        <label className="block text-sm font-semibold text-slate-700 mb-1">Medicine Name *</label>
+                        <input type="text" required placeholder="e.g. Paracetamol 500mg" className="w-full border border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:ring-2 focus:ring-blue-500 outline-none" value={newMedicine.name} onChange={(e) => setNewMedicine({...newMedicine, name: e.target.value})} />
+                    </div>
+                    <div className="grid grid-cols-2 gap-4">
+                        <div>
+                            <label className="block text-sm font-semibold text-slate-700 mb-1">Quantity *</label>
+                            <input type="number" min="1" step="1" required placeholder="100" className="w-full border border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:ring-2 focus:ring-blue-500 outline-none" value={newMedicine.quantity || ''} onChange={(e) => setNewMedicine({...newMedicine, quantity: e.target.value === '' ? '' : Number(e.target.value)})} />
+                        </div>
+                        <div>
+                            <label className="block text-sm font-semibold text-slate-700 mb-1">Price (₹) *</label>
+                            <input type="number" step="0.01" min="0.01" required placeholder="25.00" className="w-full border border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:ring-2 focus:ring-blue-500 outline-none" value={newMedicine.price || ''} onChange={(e) => setNewMedicine({...newMedicine, price: e.target.value === '' ? '' : Number(e.target.value)})} />
+                        </div>
+                    </div>
+                    <div className="grid grid-cols-2 gap-4">
+                        <div>
+                            <label className="block text-sm font-semibold text-slate-700 mb-1">Unit</label>
+                            <input type="text" className="w-full border border-slate-200 rounded-xl px-4 py-2 focus:ring-2 focus:ring-blue-500 outline-none" placeholder="tablets" value={newMedicine.unit} onChange={(e) => setNewMedicine({...newMedicine, unit: e.target.value})} />
+                        </div>
+                        <div>
+                            <label className="block text-sm font-semibold text-slate-700 mb-1">Min Threshold</label>
+                            <input type="number" min="0" className="w-full border border-slate-200 rounded-xl px-4 py-2 focus:ring-2 focus:ring-blue-500 outline-none" value={newMedicine.minThreshold} onChange={(e) => setNewMedicine({...newMedicine, minThreshold: e.target.value})} />
+                        </div>
+                    </div>
+                    <div>
+                        <label className="block text-sm font-semibold text-slate-700 mb-1">Category</label>
+                        <select className="w-full border border-slate-200 rounded-xl px-4 py-2 focus:ring-2 focus:ring-blue-500 outline-none bg-white" value={newMedicine.category} onChange={(e) => setNewMedicine({...newMedicine, category: e.target.value})}>
+                            <option value="Antibiotic">Antibiotic</option>
+                            <option value="Painkiller">Painkiller</option>
+                            <option value="Diabetes">Diabetes</option>
+                            <option value="Cardiac">Cardiac</option>
+                            <option value="Gastric">Gastric</option>
+                            <option value="Antihistamine">Antihistamine</option>
+                            <option value="Other">Other</option>
+                        </select>
+                    </div>
+                    <div className="pt-4 flex justify-end gap-3">
+                        <Button type="button" variant="secondary" onClick={() => setIsAddModalOpen(false)}>Cancel</Button>
+                        <Button type="submit" loading={submitting} disabled={submitting || !(newMedicine.name || '').trim() || !Number(newMedicine.quantity) || !Number(newMedicine.price)}>
+                            {submitting ? 'Adding...' : 'Add Medicine'}
+                        </Button>
+                    </div>
+                </form>
+            </Modal>
+
+            {/* ─── DELETE CONFIRMATION MODAL ─── */}
+            <Modal isOpen={deleteConfirm.open} onClose={() => setDeleteConfirm({ open: false, id: null, name: '' })} title="Delete Medicine">
+                <div className="text-center py-4">
+                    <div className="w-14 h-14 bg-red-50 rounded-full flex items-center justify-center mx-auto mb-4">
+                        <Trash2 size={24} className="text-red-500" />
+                    </div>
+                    <p className="text-slate-700 font-medium mb-1">Are you sure you want to delete</p>
+                    <p className="text-lg font-bold text-slate-900 mb-4">{deleteConfirm.name}?</p>
+                    <p className="text-sm text-slate-500 mb-6">This action cannot be undone.</p>
+                    <div className="flex justify-center gap-3">
+                        <Button variant="secondary" onClick={() => setDeleteConfirm({ open: false, id: null, name: '' })}>Cancel</Button>
+                        <Button variant="danger" icon={Trash2} onClick={() => handleDeleteMedicine(deleteConfirm.id)}>Delete</Button>
+                    </div>
+                </div>
+            </Modal>
+        </AppLayout>
     );
 };
+
+export default PharmacistDashboard;

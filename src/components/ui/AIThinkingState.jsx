@@ -23,22 +23,22 @@ export const AIThinkingState = ({ text = "Analyzing wellness data..." }) => {
     return (
         <motion.div
             whileHover={{ y: -3 }}
-            className="relative h-full rounded-[28px] widget-aura transition-transform duration-300"
+            className="relative h-full rounded-3xl widget-aura transition-transform duration-300"
         >
-            <div className="flex flex-col h-full p-6 bg-white/40 backdrop-blur-xl rounded-[28px] border border-white/60 shadow-[0_8px_30px_rgba(0,0,0,0.04)] hover:shadow-[0_15px_40px_rgba(0,0,0,0.08)] transition-all duration-500 relative overflow-hidden group cursor-default">
+            <div className="flex flex-col h-full p-6 liquid-glass !rounded-3xl overflow-hidden group cursor-default">
                 {/* Slow Rotating Ambient Glow */}
                 <motion.div
                     className="absolute -inset-[100%] z-0"
                     animate={{ rotate: 360 }}
                     transition={{ duration: 25, repeat: Infinity, ease: 'linear' }}
                 >
-                    <div className="absolute top-1/4 left-1/4 w-[150%] h-[150%] bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-blue-300/10 via-indigo-300/5 to-transparent blur-3xl rounded-full" />
+                    <div className="absolute top-1/4 left-1/4 w-[150%] h-[150%] bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-blue-300/10 via-blue-300/5 to-transparent blur-3xl rounded-full" />
                     <div className="absolute bottom-1/4 right-1/4 w-[150%] h-[150%] bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-cyan-300/10 via-blue-300/5 to-transparent blur-3xl rounded-full" />
                 </motion.div>
 
                 {/* Header: AI Wellness Insights */}
                 <div className="flex items-center gap-2 mb-6 relative z-10">
-                    <div className="w-8 h-8 rounded-full bg-gradient-to-br from-indigo-50 to-blue-50 border border-blue-100 flex items-center justify-center shadow-inner relative">
+                    <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-50 to-blue-50 border border-blue-100 flex items-center justify-center shadow-inner relative">
                         <span className="text-[10px] font-bold tracking-wider text-blue-600">AI</span>
                         {/* Pulsing indicator */}
                         <span className="absolute -top-0.5 -right-0.5 flex h-2.5 w-2.5">

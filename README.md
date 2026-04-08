@@ -1,6 +1,6 @@
-# React + Vite
+# MedConnect - Web-based Healthcare Platform (SaaS)
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+This platform provides a clean, desktop-first architecture for medical workflows using React, Node.js + Express, and MySQL.
 
 Currently, two official plugins are available:
 

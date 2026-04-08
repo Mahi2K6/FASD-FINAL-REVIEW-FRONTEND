@@ -2,10 +2,10 @@ import React, { useState, useEffect, useRef } from 'react';
 import ReactDOM from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Mic, MicOff, Video as VideoIcon, VideoOff, PhoneOff, RefreshCcw, Maximize2, Minimize2, CheckCircle2 } from 'lucide-react';
-import { GlassCard } from './GlassCard';
-import { GlassButton } from './GlassButton';
+import Card from './Card';
+import Button from './Button';
 
-export const VideoConsultation = ({ doctorName, consultationType = "Video Consultation", onEndCall }) => {
+const VideoConsultation = ({ doctorName, consultationType = "Video Consultation", onEndCall, onClose, onExit }) => {
     const [stream, setStream] = useState(null);
     const [hasPermission, setHasPermission] = useState(null); // null = requesting, true = granted, false = denied
     const [isMicOn, setIsMicOn] = useState(true);
@@ -14,6 +14,9 @@ export const VideoConsultation = ({ doctorName, consultationType = "Video Consul
     const [isConnecting, setIsConnecting] = useState(true);
     const [isFullScreen, setIsFullScreen] = useState(false);
     const [errorMessage, setErrorMessage] = useState("");
+    
+    // Track interval properly to clear on unmount or manual end
+    const timerRef = useRef(null);
 
     const videoRef = useRef(null);
     const containerRef = useRef(null);
@@ -65,13 +68,16 @@ export const VideoConsultation = ({ doctorName, consultationType = "Video Consul
 
     // Timer logic
     useEffect(() => {
-        let interval;
         if (!isConnecting && hasPermission) {
-            interval = setInterval(() => {
+            timerRef.current = setInterval(() => {
                 setCallDuration(prev => prev + 1);
             }, 1000);
         }
-        return () => clearInterval(interval);
+        return () => {
+            if (timerRef.current) {
+                clearInterval(timerRef.current);
+            }
+        };
     }, [isConnecting, hasPermission]);
 
     // Handle toggles
@@ -97,7 +103,14 @@ export const VideoConsultation = ({ doctorName, consultationType = "Video Consul
         if (stream) {
             stream.getTracks().forEach(track => track.stop());
         }
-        onEndCall();
+        if (timerRef.current) {
+            clearInterval(timerRef.current);
+        }
+
+        // Call any provided parent callbacks to close the modal
+        if (onEndCall) onEndCall();
+        if (onClose) onClose();
+        if (onExit) onExit();
     };
 
     const toggleFullScreen = () => {
@@ -125,7 +138,7 @@ export const VideoConsultation = ({ doctorName, consultationType = "Video Consul
                     initial={{ scale: 0.95, opacity: 0, y: 20 }}
                     animate={{ scale: 1, opacity: 1, y: 0, transition: { type: 'spring', damping: 25, stiffness: 300 } }}
                     exit={{ scale: 0.95, opacity: 0, y: 20 }}
-                    className={`relative flex flex-col overflow-hidden bg-slate-900 border border-slate-700/50 shadow-2xl rounded-[36px] ${isFullScreen ? 'w-full h-full rounded-none border-none' : 'w-full max-w-5xl aspect-video max-h-[90vh]'
+                    className={`relative flex flex-col overflow-hidden bg-slate-900 border border-slate-700/50 shadow-2xl rounded-3xl ${isFullScreen ? 'w-full h-full rounded-none border-none' : 'w-full max-w-5xl aspect-video max-h-[90vh]'
                         }`}
                 >
                     {/* TOP BAR */}
@@ -135,7 +148,7 @@ export const VideoConsultation = ({ doctorName, consultationType = "Video Consul
                                 <div className="w-10 h-10 rounded-full bg-slate-800 flex items-center justify-center border-2 border-slate-700 shadow-md">
                                     <span className="text-white font-bold">{doctorName?.charAt(0) || 'D'}</span>
                                 </div>
-                                <div className="absolute -bottom-1 -right-1 w-4 h-4 rounded-full border-2 border-slate-900 bg-emerald-500"></div>
+                                <div className="absolute -bottom-1 -right-1 w-4 h-4 rounded-full border-2 border-slate-900 bg-blue-500"></div>
                             </div>
                             <div>
                                 <h3 className="text-white font-semibold flex items-center gap-2 pointer-events-auto shadow-sm">
@@ -148,8 +161,8 @@ export const VideoConsultation = ({ doctorName, consultationType = "Video Consul
                         </div>
 
                         <div className="flex items-center gap-3">
-                            <div className="px-3 py-1.5 rounded-full bg-slate-800/80 backdrop-blur border border-slate-700 pointer-events-auto">
-                                <span className={`font-mono font-medium ${isConnecting ? 'text-slate-400' : 'text-emerald-400'} text-sm`}>
+                            <div className="px-3 py-1.5 rounded-2xl bg-slate-800/80 backdrop-blur border border-slate-700 pointer-events-auto">
+                                <span className={`font-mono font-medium ${isConnecting ? 'text-slate-400' : 'text-blue-400'} text-sm`}>
                                     {isConnecting ? '00:00' : formatTime(callDuration)}
                                 </span>
                             </div>
@@ -171,7 +184,7 @@ export const VideoConsultation = ({ doctorName, consultationType = "Video Consul
                                 <div className="relative w-24 h-24 mb-6">
                                     <div className="absolute inset-0 border-4 border-blue-500/30 rounded-full animate-ping"></div>
                                     <div className="absolute inset-2 border-4 border-blue-400/50 rounded-full animate-pulse"></div>
-                                    <div className="absolute inset-4 bg-gradient-to-tr from-blue-600 to-indigo-500 rounded-full flex items-center justify-center shadow-[0_0_30px_rgba(59,130,246,0.5)]">
+                                    <div className="absolute inset-4 bg-gradient-to-tr from-blue-600 to-blue-500 rounded-full flex items-center justify-center shadow-[0_0_30px_rgba(59,130,246,0.5)]">
                                         <VideoIcon className="text-white" size={24} />
                                     </div>
                                 </div>
@@ -183,16 +196,16 @@ export const VideoConsultation = ({ doctorName, consultationType = "Video Consul
                         {/* Permission Denied Error */}
                         {errorMessage && (
                             <div className="absolute inset-0 z-10 flex items-center justify-center bg-slate-900/95 p-6">
-                                <GlassCard className="max-w-md w-full p-8 text-center bg-red-500/10 border-red-500/20 rounded-[32px]">
+                                <Card className="max-w-md w-full p-8 text-center bg-red-500/10 border-red-500/20 rounded-3xl">
                                     <div className="w-16 h-16 rounded-full bg-red-500/20 text-red-500 flex items-center justify-center mx-auto mb-4">
                                         <VideoOff size={32} />
                                     </div>
                                     <h3 className="text-xl font-bold text-white mb-2">Access Denied</h3>
                                     <p className="text-red-200 mb-6">{errorMessage}</p>
-                                    <GlassButton onClick={handleEndCall} className="w-full bg-slate-800 text-white hover:bg-slate-700 border-slate-700 rounded-full py-3">
+                                    <Button onClick={handleEndCall} className="w-full bg-slate-800 text-white hover:bg-slate-700 border-slate-700 rounded-2xl py-3">
                                         Return to Dashboard
-                                    </GlassButton>
-                                </GlassCard>
+                                    </Button>
+                                </Card>
                             </div>
                         )}
 
@@ -286,7 +299,7 @@ export const VideoConsultation = ({ doctorName, consultationType = "Video Consul
                         <TippyTooltip content="End Call">
                             <button
                                 onClick={handleEndCall}
-                                className="px-6 sm:px-8 h-12 sm:h-14 rounded-full bg-red-500 hover:bg-red-600 shadow-lg shadow-red-500/30 text-white flex items-center justify-center gap-2 transition-transform transform hover:scale-105 active:scale-95 font-semibold"
+                                className="px-6 sm:px-8 h-12 sm:h-14 rounded-2xl bg-red-500 hover:bg-red-600 shadow-lg shadow-red-500/30 text-white flex items-center justify-center gap-2 transition-transform transform hover:scale-105 active:scale-95 font-semibold"
                             >
                                 <PhoneOff size={20} />
                                 <span className="hidden sm:inline">End Call</span>
@@ -322,7 +335,7 @@ const TippyTooltip = ({ children, content }) => {
                         initial={{ opacity: 0, y: 10, scale: 0.9 }}
                         animate={{ opacity: 1, y: 0, scale: 1 }}
                         exit={{ opacity: 0, scale: 0.9 }}
-                        className="absolute -top-10 px-3 py-1.5 bg-slate-900 border border-slate-700 text-xs text-white rounded-lg shadow-xl whitespace-nowrap z-50 pointer-events-none"
+                        className="absolute -top-10 px-3 py-1.5 bg-slate-900 border border-slate-700 text-xs text-white rounded-2xl shadow-xl whitespace-nowrap z-50 pointer-events-none"
                     >
                         {content}
                         <div className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-2 h-2 bg-slate-900 border-b border-r border-slate-700 transform rotate-45"></div>
@@ -332,3 +345,5 @@ const TippyTooltip = ({ children, content }) => {
         </div>
     );
 };
+
+export default VideoConsultation;

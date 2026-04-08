@@ -1,74 +1,192 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { PillNav } from '../../components/ui/PillNav';
-import { GlassCard } from '../../components/ui/GlassCard';
-import { GlassButton } from '../../components/ui/GlassButton';
-import { GlassInput } from '../../components/ui/GlassInput';
+import {
+    Users, Clock, Pill, FileText, Video, Plus, CheckCircle,
+    Search, MessageCircle, Send, X, BarChart3, TrendingUp,
+    Check, Info, DollarSign, Activity, Star, Calendar, CalendarX,
+    ChevronRight, Zap, Brain, Shield, UserCheck, Loader2
+} from 'lucide-react';
+import { AreaChart, Area, PieChart, Pie, Cell, ResponsiveContainer, XAxis, YAxis, Tooltip as RechartsTooltip } from 'recharts';
 import { useAppContext } from '../../AppContext';
-import { Users, Clock, Pill, FileText, LogOut, Video, Plus, CheckCircle, Search, MessageCircle, Send, X, Bell, BarChart3, TrendingUp, Check, Info, DollarSign, Activity, Star, Calendar } from 'lucide-react';
-import { ParallaxWrapper } from '../../components/ui/ParallaxWrapper';
-import { FloatingAssistant } from '../../components/ui/FloatingAssistant';
-import { AreaChart, Area, LineChart, Line, BarChart, Bar, PieChart, Pie, Cell, ResponsiveContainer, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip } from 'recharts';
+import { useToast } from '../../components/ui/ToastNotification';
+import API from '../../api';
+import { useNavigate } from 'react-router-dom';
+import AppLayout from '../../components/layout/AppLayout';
+import Card from '../../components/ui/Card';
+import Button from '../../components/ui/Button';
+import StatCard from '../../components/ui/StatCard';
+import EmptyState from '../../components/ui/EmptyState';
+import Table from '../../components/ui/Table';
+import Modal from '../../components/ui/Modal';
+import VideoConsultation from '../../components/ui/VideoConsultation';
 
-const mockWeeklyEarnings = [
-    { name: 'Mon', value: 4500 }, { name: 'Tue', value: 5200 }, { name: 'Wed', value: 3800 },
-    { name: 'Thu', value: 6100 }, { name: 'Fri', value: 5800 }, { name: 'Sat', value: 7200 }, { name: 'Sun', value: 6500 },
-];
-const mockCompletion = [{ name: 'Completed', value: 88 }, { name: 'Cancelled', value: 12 }];
-const COMPLETION_COLORS = ['#3b82f6', '#f1f5f9'];
-import { ProfileMenu } from '../../components/ui/ProfileMenu';
+const COMPLETION_COLORS = ['#1a6fc4', '#e8f1fb'];
 
-const tabs = [
-    { id: 'waiting', label: 'Waiting Room', icon: Clock },
-    { id: 'patients', label: 'Patients', icon: Users },
-    { id: 'prescriptions', label: 'Prescriptions', icon: Pill },
-    { id: 'history', label: 'History', icon: FileText },
-]; const mockDoctorVisits = [
-    { name: 'Mon', value: 12 },
-    { name: 'Tue', value: 18 },
-    { name: 'Wed', value: 15 },
-    { name: 'Thu', value: 22 },
-    { name: 'Fri', value: 20 },
-    { name: 'Sat', value: 30 },
-    { name: 'Sun', value: 25 },
-];
+const DoctorDashboard = () => {
+    const { data, currentUser, fetchData, loadingDb } = useAppContext();
+    const toast = useToast();
+    const navigate = useNavigate();
 
-const mockRatingTrend = [
-    { name: 'Wk1', value: 4.5 },
-    { name: 'Wk2', value: 4.6 },
-    { name: 'Wk3', value: 4.8 },
-    { name: 'Wk4', value: 4.7 },
-    { name: 'Wk5', value: 4.9 },
-    { name: 'Wk6', value: 4.9 },
-];
-
-export const DoctorDashboard = () => {
     const [activeTab, setActiveTab] = useState('waiting');
-    const { currentUser, data, updateData, logout, setIsSearchGlobalVisible } = useAppContext();
-
-    // Notifications
-    const myNotifications = data.notifications?.filter(n => n.userId === currentUser.id) || [];
-    const unreadCount = myNotifications.filter(n => !n.read).length;
-    const [showNotifications, setShowNotifications] = useState(false);
-
-    // States
     const [inCall, setInCall] = useState(false);
     const [currentPatient, setCurrentPatient] = useState(null);
-    const [prescriptionForm, setPrescriptionForm] = useState([{ name: '', dosage: '', quantity: '' }]);
-    const [hasSentPrescription, setHasSentPrescription] = useState(false);
+    const [isAISummarizing, setIsAISummarizing] = useState(false);
+    const [prescriptionForm, setPrescriptionForm] = useState([]);
+    const [showPrescriptionModal, setShowPrescriptionModal] = useState(false);
+    const [rxStep, setRxStep] = useState(1);
+    const [medInput, setMedInput] = useState('');
 
+    const [localDoctorAppointments, setLocalDoctorAppointments] = useState([]);
+    
+    // Filtering states
+    const [searchQuery, setSearchQuery] = useState('');
+    const [statusFilter, setStatusFilter] = useState('All');
+    const [dateFilter, setDateFilter] = useState('Today');
+
+    // Fix 1: Appointments not loading
     useEffect(() => {
-        if (!setIsSearchGlobalVisible) return;
-        const isSearchableTab = ['patients', 'history'].includes(activeTab);
-        setIsSearchGlobalVisible(isSearchableTab && !inCall);
-        return () => setIsSearchGlobalVisible(true);
-    }, [activeTab, inCall, setIsSearchGlobalVisible]);
+        const fetchDoctorAppointments = async () => {
+            try {
+                const res = await API.get(`/appointments/doctor/${currentUser.id}`);
+                setLocalDoctorAppointments(Array.isArray(res.data) ? res.data : []);
+            } catch (err) {
+                console.error('Failed to fetch doctor appointments', err);
+            }
+        };
+        if (currentUser?.id) fetchDoctorAppointments();
+    }, [currentUser?.id]);
 
-    const myAppointments = data.appointments.filter(a => a.doctorId === currentUser.id);
-    const upcomingAppointments = myAppointments.filter(a => a.status === 'scheduled');
-    const completedAppointments = myAppointments.filter(a => a.status === 'completed');
+    // Redirect handler
+    useEffect(() => {
+        if (!currentUser) navigate('/login');
+        if (currentUser && currentUser.role?.toUpperCase() !== 'DOCTOR') navigate('/dashboard');
+    }, [currentUser, navigate]);
 
+    // Fix 2: Stats cards derive from localDoctorAppointments
+    // Normalize today's date in multiple formats for robust comparison
+    const todayDate = new Date();
+    const todayDDMMYYYY = todayDate.toLocaleDateString('en-GB', {
+        day: '2-digit',
+        month: '2-digit', 
+        year: 'numeric'
+    }).replace(/\//g, '/'); // "08/04/2026"
+    
+    const todayISO = todayDate.toISOString().split('T')[0]; // "2026-04-08"
+    
+    const isToday = (dateStr) => {
+        if (!dateStr) return false;
+        const d = dateStr.trim();
+        // Match dd/MM/yyyy
+        if (d === todayDDMMYYYY) return true;
+        // Match yyyy-MM-dd
+        if (d === todayISO) return true;
+        // Match MM/dd/yyyy  
+        const parts = d.split('/');
+        if (parts.length === 3) {
+            const [a, b, c] = parts;
+            // Try dd/MM/yyyy parse
+            const asDate1 = new Date(`${c}-${b}-${a}`);
+            if (!isNaN(asDate1) && asDate1.toISOString().split('T')[0] === todayISO) return true;
+            // Try MM/dd/yyyy parse  
+            const asDate2 = new Date(`${c}-${a}-${b}`);
+            if (!isNaN(asDate2) && asDate2.toISOString().split('T')[0] === todayISO) return true;
+        }
+        return false;
+    };
+    
+    const todaysAppointments = localDoctorAppointments.filter(a => isToday(a.appointmentDate));
+    const todaysPatients = todaysAppointments.length;
 
+    // ALL pending appointments (for the waiting room — shows full queue, not just today)
+    const pendingAppointments = localDoctorAppointments.filter(a => 
+        a.status?.toUpperCase() === 'PENDING');
+    const pending = pendingAppointments.length;
+
+    const completed = localDoctorAppointments.filter(a => 
+        a.status?.toUpperCase() === 'COMPLETED').length;
+
+    // Derived states
+    const myPrescriptions = useMemo(() => {
+        return (data.prescriptions || []).filter(p => String(p.doctorId) === String(currentUser?.id));
+    }, [data.prescriptions, currentUser?.id]);
+
+    // Fix 4: Appointments tab — grouped list
+    const groupedAppointments = useMemo(() => {
+        let filtered = localDoctorAppointments;
+        if (searchQuery) {
+            filtered = filtered.filter(a => (a.patientName || '').toLowerCase().includes(searchQuery.toLowerCase()));
+        }
+        if (statusFilter !== 'All') {
+            filtered = filtered.filter(a => (a.status || '').toUpperCase() === statusFilter.toUpperCase());
+        }
+        if (dateFilter === 'Today') {
+            filtered = filtered.filter(a => isToday(a.appointmentDate));
+        } else if (dateFilter === 'This Week') {
+            // Primitive this week filter: just showing ALL for now or could parse en-GB
+            // For simplicity, we just keep all if This Week unless parsed cleanly.
+            // Let's implement real parsing:
+            filtered = filtered.filter(a => {
+                if (!a.appointmentDate) return false;
+                const [d,m,y] = a.appointmentDate.split('/');
+                const appDate = new Date(`${y}-${m}-${d}`);
+                const now = new Date();
+                const weekFromNow = new Date();
+                weekFromNow.setDate(now.getDate() + 7);
+                return appDate >= now && appDate <= weekFromNow;
+            });
+        }
+        
+        const groups = {};
+        const tomorrowDate = new Date(); tomorrowDate.setDate(tomorrowDate.getDate() + 1);
+        const tomorrow = tomorrowDate.toLocaleDateString('en-GB');
+
+        filtered.forEach(apt => {
+            let label = apt.appointmentDate;
+            if (isToday(apt.appointmentDate)) label = "Today";
+            else if (apt.appointmentDate === tomorrow) label = "Tomorrow";
+            if (!groups[label]) groups[label] = [];
+            groups[label].push(apt);
+        });
+
+        Object.values(groups).forEach(arr => {
+            arr.sort((a,b) => (a.startTime || '00:00').localeCompare(b.startTime || '00:00'));
+        });
+        
+        const sortedKeys = Object.keys(groups).sort((a, b) => {
+            if (a === 'Today') return -1;
+            if (b === 'Today') return 1;
+            if (a === 'Tomorrow') return -1;
+            if (b === 'Tomorrow') return 1;
+            return a.localeCompare(b);
+        });
+
+        return sortedKeys.map(k => ({ label: k, items: groups[k] }));
+    }, [localDoctorAppointments, searchQuery, statusFilter, dateFilter, todayISO]);
+
+    // Fix 5: Patients tab
+    const uniquePatients = useMemo(() => {
+        return [...new Map(
+            localDoctorAppointments.map(a => [a.patientId, {
+                id: a.patientId,
+                name: a.patientName,
+                phone: a.patientPhone,
+                lastVisit: a.appointmentDate
+            }])
+        ).values()];
+    }, [localDoctorAppointments]);
+
+    const handleMarkComplete = async (aptId) => {
+        try {
+            await API.put(`/appointments/${aptId}/status`, { status: 'COMPLETED' });
+            toast.success('Success', 'Appointment marked as completed.');
+            
+            setLocalDoctorAppointments(prev => prev.map(a => 
+                a.id === aptId ? { ...a, status: 'COMPLETED' } : a
+            ));
+        } catch(err) {
+            toast.error('Error', 'Failed to update appointment status.');
+        }
+    };
 
     const handleStartConsultation = (apt) => {
         setCurrentPatient(apt);
@@ -77,417 +195,518 @@ export const DoctorDashboard = () => {
 
     const handleEndConsultation = () => {
         setInCall(false);
-        setActiveTab('prescriptions');
+        setShowPrescriptionModal(true);
     };
 
-    const addMedicineRow = () => {
-        setPrescriptionForm([...prescriptionForm, { name: '', dosage: '', quantity: '' }]);
+    const handleAISummarize = () => {
+        setIsAISummarizing(true);
+        setTimeout(() => {
+            setIsAISummarizing(false);
+            toast.success('AI Summary', 'Patient has a history of seasonal allergies and mild hypertension. Recent reports show normal vitals but low Vitamin D.');
+        }, 2000);
     };
 
-    const updateMedicine = (index, field, value) => {
-        const updated = [...prescriptionForm];
-        updated[index][field] = value;
-        setPrescriptionForm(updated);
+    const handleSendPrescription = async () => {
+        if (!currentPatient) return;
+        const validMeds = prescriptionForm.filter(m => m.name !== '');
+        if (validMeds.length === 0) return;
+
+        try {
+            for (const med of validMeds) {
+                await API.post(`/prescriptions`, {
+                    patient_id: currentPatient.patientId,
+                    doctor_id: currentUser.id,
+                    medication_name: med.name,
+                    dosage: med.dosage,
+                    frequency: med.quantity,
+                    duration: '7 days',
+                    notes: '',
+                });
+            }
+
+            await API.put(`/appointments/${currentPatient.id}/status`, { status: 'completed' });
+
+            fetchData();
+            setPrescriptionForm([{ name: '', dosage: '', quantity: '' }]);
+            setCurrentPatient(null);
+            setShowPrescriptionModal(false);
+            setActiveTab('waiting');
+        } catch (err) {
+            console.error('Prescription error:', err);
+        }
     };
 
-    const handleSendPrescription = () => {
-        const newPrescription = {
-            id: `RX${Date.now()}`,
-            doctorId: currentUser.id,
-            doctorName: currentUser.name,
-            patientId: currentPatient.patientId,
-            patientName: currentPatient.patientName,
-            medicines: prescriptionForm.filter(m => m.name !== ''),
-            status: 'pending',
-            date: new Date().toISOString()
+    // Doctor Earnings (inline)
+    const [earningsData, setEarningsData] = useState({ total_earnings: 0, history: [] });
+    useEffect(() => {
+        if (activeTab !== 'earnings' || !currentUser?.id) return;
+        const fetchEarnings = async () => {
+            try {
+                const res = await API.get(`/doctor/earnings/${currentUser.id}`);
+                setEarningsData(res.data || { total_earnings: 0, history: [] });
+            } catch (err) {
+                console.warn('Earnings fetch failed silently:', err.message);
+                setEarningsData({ total_earnings: 0, history: [] });
+            }
         };
+        fetchEarnings();
+    }, [activeTab, currentUser?.id]);
 
-        // Update appointment status to completed
-        const updatedAppointments = data.appointments.map(a =>
-            a.id === currentPatient.id ? { ...a, status: 'completed' } : a
+    if (loadingDb) {
+        return (
+            <AppLayout activeTab={activeTab} setActiveTab={setActiveTab}>
+                <div className="flex items-center justify-center h-64">
+                    <Loader2 size={32} className="text-[var(--color-primary)] animate-spin" />
+                </div>
+            </AppLayout>
         );
-
-        updateData('appointments', updatedAppointments);
-        updateData('prescriptions', [...data.prescriptions, newPrescription]);
-
-        // Reset form
-        setPrescriptionForm([{ name: '', dosage: '', quantity: '' }]);
-        setCurrentPatient(null);
-        setActiveTab('waiting');
-    };
+    }
 
     return (
-        <main className="main-content w-full flex-1 bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-100 relative overflow-x-hidden flex flex-col items-center p-4 after:absolute after:inset-0 after:bg-[radial-gradient(circle_at_top,_rgba(255,255,255,0.6),transparent_60%)] after:pointer-events-none">
-            {/* Background blobs with Parallax */}
-            <div className="fixed inset-0 pointer-events-none z-0">
-                <ParallaxWrapper depth={1}>
-                    <div className="absolute top-[-10%] left-[-10%] w-96 h-96 bg-blue-200 rounded-full mix-blend-multiply filter blur-3xl opacity-30 animate-blob" />
-                </ParallaxWrapper>
-                <ParallaxWrapper depth={1.2}>
-                    <div className="absolute bottom-[-10%] right-[-10%] w-96 h-96 bg-rose-200 rounded-full mix-blend-multiply filter blur-3xl opacity-30 animate-blob" />
-                </ParallaxWrapper>
-            </div>
+        <AppLayout activeTab={activeTab} setActiveTab={setActiveTab}>
+            <AnimatePresence mode="wait">
+                {/* ─── WAITING ROOM ─── */}
+                {activeTab === 'waiting' && (
+                    <motion.div key="waiting" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="space-y-6">
+                                <h2 className="text-2xl font-bold text-slate-800 tracking-tight">
+                                    <span className="font-normal text-slate-500">{new Date().getHours() < 12 ? 'Good morning,' : new Date().getHours() < 18 ? 'Good afternoon,' : 'Good evening,'}</span> <span className="font-bold text-slate-800">Dr. {currentUser?.name?.split(' ')[0]}</span>
+                                </h2>
 
-            {/* Top Header */}
-            <header className="top-header">
-                <div className="logo-area hidden sm:flex">
-                    <img src="/medconnect.png" alt="MedConnect Logo" className="drop-shadow-sm" />
-                    <div className="flex flex-col">
-                        <h1 className="logo-title text-slate-800 leading-none mb-[2px]">
-                            <span className="bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent">MEDCONNECT</span>
-                        </h1>
-                        <span className="logo-subtitle text-slate-500 uppercase tracking-widest leading-none">Smart Healthcare</span>
-                    </div>
-                </div>
-
-                {/* Navigation Pill */}
-                <PillNav tabs={tabs} activeTab={activeTab} setActiveTab={setActiveTab} className="nav-pill" />
-
-                <div className="profile-area">
-                    {/* User Info Right Side */}
-                    <div className="hidden md:flex flex-col items-end mr-2">
-                        <span className="text-sm font-semibold text-slate-800">Hello, {currentUser?.name?.split(' ')[0] || 'Doctor'}</span>
-                        <span className="text-[10px] font-medium text-slate-500 uppercase tracking-widest leading-none mt-1">Doctor Portal</span>
-                    </div>
-
-                    <div className="relative pointer-events-auto">
-                        <button onClick={() => setShowNotifications(!showNotifications)} className="relative p-2 bg-white/50 backdrop-blur-md rounded-full text-slate-500 hover:text-blue-600 hover:shadow-md border border-white/60 transition-all duration-300">
-                            <Bell size={20} />
-                            {unreadCount > 0 && <span className="absolute top-1 right-1 w-2.5 h-2.5 bg-red-500 rounded-full border-2 border-white animate-pulse"></span>}
-                        </button>
-
-                        <AnimatePresence>
-                            {showNotifications && (
-                                <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95 }} className="absolute right-0 mt-3 w-80 bg-white/95 backdrop-blur-xl border border-slate-100 shadow-[0_20px_60px_rgba(0,0,0,0.15)] rounded-[32px] p-4 z-50">
-                                    <div className="flex items-center justify-between mb-3">
-                                        <h4 className="font-semibold text-slate-800 flex items-center gap-2"><Bell size={16} className="text-blue-600" /> Notifications</h4>
-                                        {unreadCount > 0 && <span className="text-xs font-semibold bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full">{unreadCount} New</span>}
-                                    </div>
-                                    <div className="space-y-2 max-h-72 overflow-y-auto pr-1">
-                                        {myNotifications.length === 0 ? (
-                                            <p className="text-sm text-slate-500 text-center py-4">No new notifications</p>
-                                        ) : (
-                                            myNotifications.map(notif => (
-                                                <div key={notif.id} className={`p-3 text-sm rounded-[28px] border transition-colors ${notif.read ? 'bg-slate-50 border-slate-100 text-slate-600' : 'bg-blue-50 border-blue-100 text-blue-800'}`}>
-                                                    <div className="font-semibold mb-0.5">{notif.title}</div>
-                                                    <div>{notif.message}</div>
-                                                    <div className="text-xs mt-1 opacity-60 font-medium">{notif.time}</div>
-                                                </div>
-                                            ))
-                                        )}
-                                    </div>
-                                </motion.div>
-                            )}
-                        </AnimatePresence>
-                    </div>
-
-                    <ProfileMenu />
-                </div>
-            </header>
-
-            {/* Main Content Area */}
-            <div className="w-full max-w-6xl z-10 flex-1 flex flex-col pointer-events-auto">
-                <AnimatePresence mode="wait">
-
-                    {/* WAITING ROOM TAB */}
-                    {activeTab === 'waiting' && (
-                        <motion.div key="waiting" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }}>
-                            {inCall ? (
-                                <GlassCard className="p-2 bg-white border-slate-200 shadow-xl relative overflow-hidden h-[600px] flex flex-col">
-                                    {/* Mock Video UI */}
-                                    <div className="flex-1 relative rounded-[28px] overflow-hidden bg-slate-100 border-2 border-slate-100">
-                                        <div className="absolute inset-0 flex flex-col items-center justify-center text-center bg-slate-800">
-                                            <div className="w-24 h-24 rounded-full bg-slate-700 flex items-center justify-center mb-4 border-4 border-slate-600 shadow-md">
-                                                <Users size={40} className="text-slate-400" />
-                                            </div>
-                                            <h3 className="text-white text-xl font-medium">{currentPatient?.patientName}</h3>
-                                            <p className="text-white/50 mb-4">{currentPatient?.problem || 'General Consultation'}</p>
-                                            <div className="px-3 py-1 bg-red-500/20 text-red-400 rounded-full text-xs font-semibold uppercase tracking-wider border border-red-500/30 animate-pulse">Live Focus Session</div>
-                                        </div>
-                                        {/* Self View */}
-                                        <div className="absolute top-4 right-4 w-48 h-32 bg-slate-900 rounded-[28px] border-4 border-white shadow-2xl flex items-center justify-center overflow-hidden">
-                                            <Video className="text-slate-600" size={32} />
-                                        </div>
-                                    </div>
-                                    {/* Controls */}
-                                    <div className="h-20 flex items-center justify-center gap-6 bg-slate-50 rounded-b-[24px]">
-                                        <button className="w-12 h-12 rounded-full bg-white hover:bg-slate-100 border border-slate-200 text-slate-700 shadow-sm flex items-center justify-center transition-colors">🎤</button>
-                                        <button className="w-12 h-12 rounded-full bg-white hover:bg-slate-100 border border-slate-200 text-slate-700 shadow-sm flex items-center justify-center transition-colors">📹</button>
-                                        <button onClick={handleEndConsultation} className="px-6 h-12 rounded-full bg-red-500 hover:bg-red-600 shadow-md shadow-red-500/20 border-0 text-white flex items-center justify-center transition-colors font-semibold hover:scale-105 active:scale-95 duration-200">End & Prescribe</button>
-                                    </div>
-                                </GlassCard>
-                            ) : (
-                                <div className="space-y-8">
-                                    {/* Analytics Overview Stats */}
-                                    <div className="grid grid-cols-2 lg:grid-cols-5 gap-4 md:gap-6">
-                                        <GlassCard className="p-4 bg-gradient-to-br from-blue-50/80 to-white border-blue-100 hover:-translate-y-1 transition-transform">
-                                            <p className="text-[10px] md:text-xs font-semibold text-blue-600 uppercase tracking-wider mb-2 flex items-center gap-1.5"><Users size={14} /> Patients</p>
-                                            <h3 className="text-2xl md:text-3xl font-bold text-slate-800">124</h3>
-                                        </GlassCard>
-                                        <GlassCard className="p-4 bg-gradient-to-br from-indigo-50/80 to-white border-indigo-100 hover:-translate-y-1 transition-transform">
-                                            <p className="text-[10px] md:text-xs font-semibold text-indigo-600 uppercase tracking-wider mb-2 flex items-center gap-1.5"><Calendar size={14} /> Appts Today</p>
-                                            <h3 className="text-2xl md:text-3xl font-bold text-slate-800">{myAppointments.length}</h3>
-                                        </GlassCard>
-                                        <GlassCard className="p-4 bg-gradient-to-br from-emerald-50/80 to-white border-emerald-100 hover:-translate-y-1 transition-transform">
-                                            <p className="text-[10px] md:text-xs font-semibold text-emerald-600 uppercase tracking-wider mb-2 flex items-center gap-1.5"><Clock size={14} /> Avg Time</p>
-                                            <h3 className="text-2xl md:text-3xl font-bold text-slate-800">12m</h3>
-                                        </GlassCard>
-                                        <GlassCard className="p-4 bg-gradient-to-br from-amber-50/80 to-white border-amber-100 hover:-translate-y-1 transition-transform">
-                                            <p className="text-[10px] md:text-xs font-semibold text-amber-600 uppercase tracking-wider mb-2 flex items-center gap-1.5"><DollarSign size={14} /> Earnings</p>
-                                            <h3 className="text-2xl md:text-3xl font-bold text-slate-800">₹42k</h3>
-                                        </GlassCard>
-                                        <GlassCard className="p-4 bg-gradient-to-br from-rose-50/80 to-white border-rose-100 hover:-translate-y-1 transition-transform">
-                                            <p className="text-[10px] md:text-xs font-semibold text-rose-600 uppercase tracking-wider mb-2 flex items-center gap-1.5"><Star size={14} /> Rating</p>
-                                            <h3 className="text-2xl md:text-3xl font-bold text-slate-800">4.9</h3>
-                                        </GlassCard>
-                                    </div>
-
-                                    {/* Analytics Charts Rows */}
-                                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                                        <GlassCard className="p-6 lg:col-span-2">
-                                            <h3 className="text-lg font-semibold text-slate-800 mb-6 flex items-center gap-2"><BarChart3 size={18} className="text-blue-500" /> Daily Patient Visits</h3>
-                                            <div className="h-64">
-                                                <ResponsiveContainer width="100%" height="100%">
-                                                    <AreaChart data={mockDoctorVisits} margin={{ top: 5, right: 0, left: -20, bottom: 0 }}>
-                                                        <defs>
-                                                            <linearGradient id="colorVisitsDoctor" x1="0" y1="0" x2="0" y2="1">
-                                                                <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.4} />
-                                                                <stop offset="95%" stopColor="#3b82f6" stopOpacity={0} />
-                                                            </linearGradient>
-                                                        </defs>
-                                                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                                                        <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#94a3b8' }} dy={10} />
-                                                        <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#94a3b8' }} />
-                                                        <RechartsTooltip contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 20px rgba(0,0,0,0.08)' }} />
-                                                        <Area type="monotone" dataKey="value" stroke="#3b82f6" strokeWidth={3} fillOpacity={1} fill="url(#colorVisitsDoctor)" activeDot={{ r: 6, fill: '#3b82f6', stroke: '#fff', strokeWidth: 3 }} />
-                                                    </AreaChart>
-                                                </ResponsiveContainer>
-                                            </div>
-                                        </GlassCard>
-                                        <GlassCard className="p-6 lg:col-span-1">
-                                            <h3 className="text-lg font-semibold text-slate-800 mb-6 flex items-center gap-2"><CheckCircle size={18} className="text-indigo-500" /> Completion Rate</h3>
-                                            <div className="h-48 flex items-center justify-center relative mt-4">
-                                                <ResponsiveContainer width="100%" height="100%">
-                                                    <PieChart>
-                                                        <Pie data={mockCompletion} cx="50%" cy="50%" innerRadius={60} outerRadius={80} paddingAngle={5} dataKey="value" stroke="none">
-                                                            {mockCompletion.map((entry, index) => (
-                                                                <Cell key={`cell-${index}`} fill={COMPLETION_COLORS[index % COMPLETION_COLORS.length]} />
-                                                            ))}
-                                                        </Pie>
-                                                        <RechartsTooltip contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 20px rgba(0,0,0,0.08)' }} />
-                                                    </PieChart>
-                                                </ResponsiveContainer>
-                                                <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-                                                    <span className="text-3xl font-bold text-slate-800">88%</span>
-                                                </div>
-                                            </div>
-                                        </GlassCard>
-                                    </div>
-
-                                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                                        <GlassCard className="p-6">
-                                            <h3 className="text-lg font-semibold text-slate-800 mb-6 flex items-center gap-2"><TrendingUp size={18} className="text-amber-500" /> Patient Satisfaction Trend</h3>
-                                            <div className="h-56">
-                                                <ResponsiveContainer width="100%" height="100%">
-                                                    <LineChart data={mockRatingTrend} margin={{ top: 5, right: 0, left: -20, bottom: 0 }}>
-                                                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                                                        <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#94a3b8' }} dy={10} />
-                                                        <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#94a3b8' }} domain={[3.5, 5.0]} />
-                                                        <RechartsTooltip contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 20px rgba(0,0,0,0.08)' }} />
-                                                        <Line type="monotone" dataKey="value" stroke="#f59e0b" strokeWidth={3} dot={{ r: 4, fill: '#f59e0b', strokeWidth: 0 }} activeDot={{ r: 6, fill: '#f59e0b', stroke: '#fff', strokeWidth: 3 }} style={{ filter: 'drop-shadow(0 6px 8px rgba(245,158,11,0.25))' }} />
-                                                    </LineChart>
-                                                </ResponsiveContainer>
-                                            </div>
-                                        </GlassCard>
-                                        <GlassCard className="p-6">
-                                            <h3 className="text-lg font-semibold text-slate-800 mb-6 flex items-center gap-2"><DollarSign size={18} className="text-emerald-500" /> Weekly Earnings</h3>
-                                            <div className="h-56">
-                                                <ResponsiveContainer width="100%" height="100%">
-                                                    <BarChart data={mockWeeklyEarnings} margin={{ top: 5, right: 0, left: -20, bottom: 0 }}>
-                                                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                                                        <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#94a3b8' }} dy={10} />
-                                                        <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#94a3b8' }} />
-                                                        <RechartsTooltip cursor={{ fill: 'transparent' }} contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 20px rgba(0,0,0,0.08)' }} />
-                                                        <Bar dataKey="value" fill="#10b981" radius={[4, 4, 0, 0]} barSize={30} style={{ filter: 'drop-shadow(0 4px 6px rgba(16,185,129,0.2))' }} />
-                                                    </BarChart>
-                                                </ResponsiveContainer>
-                                            </div>
-                                        </GlassCard>
-                                    </div>
-
-                                    <GlassCard className="p-6">
-                                        <h3 className="text-xl font-bold text-slate-800 mb-6 flex items-center gap-3">
-                                            <Clock className="text-blue-600" /> Live Appointment Queue
-                                        </h3>
-
-                                        {upcomingAppointments.length === 0 ? (
-                                            <div className="text-center py-12 text-slate-500">
-                                                <CheckCircle size={48} className="mx-auto mb-4 text-slate-300" />
-                                                <p>Your waiting room is empty. Enjoy your break!</p>
-                                            </div>
-                                        ) : (
-                                            <div className="space-y-4">
-                                                {upcomingAppointments.map((apt, idx) => (
-                                                    <div key={apt.id} className="p-5 bg-white/60 rounded-[28px] border border-slate-200 shadow-sm hover:shadow-md transition-shadow flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                                                        <div className="flex items-center gap-4">
-                                                            <div className="w-12 h-12 bg-blue-50 border border-blue-100 rounded-full flex items-center justify-center text-blue-600 font-bold text-xl shadow-sm">
-                                                                {idx + 1}
-                                                            </div>
-                                                            <div>
-                                                                <h4 className="font-semibold text-slate-800 text-lg tracking-tight">{apt.patientName}</h4>
-                                                                <p className="text-sm text-slate-500 font-medium">{new Date(apt.date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} • Consultation</p>
-                                                            </div>
-                                                        </div>
-
-                                                        <div className="flex flex-wrap items-center gap-3">
-                                                            {idx === 0 && (
-                                                                <span className="text-[10px] font-bold tracking-wider uppercase bg-emerald-50 text-emerald-600 border border-emerald-200 px-3 py-1.5 rounded-full shadow-sm animate-pulse">Waiting Now</span>
-                                                            )}
-                                                            <GlassButton onClick={() => handleStartConsultation(apt)} className="px-5 py-2 group bg-blue-600 hover:bg-blue-700 text-white border-0 shadow-sm shadow-blue-500/20">
-                                                                <Video size={16} className="mr-2 group-hover:scale-110 transition-transform" /> Start Session
-                                                            </GlassButton>
-                                                        </div>
-                                                    </div>
-                                                ))}
-                                            </div>
-                                        )}
-                                    </GlassCard>
-                                </div>
-                            )}
-                        </motion.div>
-                    )}
-
-                    {/* PRESCRIPTIONS BUILDER TAB */}
-                    {activeTab === 'prescriptions' && (
-                        <motion.div key="prescriptions" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }}>
-                            <GlassCard className="p-8">
-                                <h3 className="text-2xl font-bold text-slate-800 mb-2">Prescription Builder</h3>
-                                <p className="text-slate-500 mb-6">Create and send digital prescriptions directly to the pharmacist.</p>
-
-                                {currentPatient ? (
-                                    <div className="bg-white/60 backdrop-blur-md p-5 rounded-[32px] border border-white shadow-sm mb-6 flex items-center justify-between">
+                        {/* Stats */}
+                        {/* Stats Row */}
+                        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-6">
+                            {[
+                                { title: "Today's Patients", value: todaysPatients, color: "from-blue-500 to-indigo-600", iconColor: "text-blue-600", bgIcon: "bg-blue-100", icon: Users, subtitle: "Total unique patients" },
+                                { title: "Pending", value: pending, color: "from-amber-400 to-orange-500", iconColor: "text-amber-600", bgIcon: "bg-amber-100", icon: Clock, subtitle: "In waiting room" },
+                                { title: "Completed", value: completed, color: "from-emerald-400 to-teal-500", iconColor: "text-emerald-600", bgIcon: "bg-emerald-100", icon: CheckCircle, subtitle: "Consultations finished" },
+                                { title: "Total Earnings", value: `₹${(completed * 500).toLocaleString()}`, color: "from-indigo-500 to-purple-600", iconColor: "text-indigo-600", bgIcon: "bg-indigo-100", icon: DollarSign, subtitle: "Today's revenue" },
+                            ].map((stat, i) => (
+                                <motion.div 
+                                    key={i} 
+                                    whileHover={{ scale: 1.02 }} 
+                                    className="relative overflow-hidden rounded-2xl p-5 shadow-sm border border-white/40 bg-white/60 backdrop-blur-xl transition-all"
+                                >
+                                    <div className="relative z-10 flex items-center justify-between">
                                         <div>
-                                            <p className="text-[10px] text-blue-600 font-bold uppercase tracking-wider mb-1">Patient</p>
-                                            <h4 className="font-bold text-slate-800 text-lg">{currentPatient.patientName}</h4>
+                                            <p className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">{stat.title}</p>
+                                            <h3 className={`text-3xl font-extrabold bg-clip-text text-transparent bg-gradient-to-r ${stat.color} pb-1`}>
+                                                {stat.value}
+                                            </h3>
+                                            <p className="text-[10px] text-slate-400 mt-1 font-semibold">{stat.subtitle}</p>
+                                        </div>
+                                        <div className={`w-12 h-12 rounded-full ${stat.bgIcon} flex items-center justify-center shrink-0 shadow-inner`}>
+                                            <stat.icon size={22} className={stat.iconColor} />
                                         </div>
                                     </div>
-                                ) : (
-                                    <div className="bg-orange-50/80 backdrop-blur-md p-5 rounded-[32px] border border-orange-200/50 mb-6 font-medium text-orange-700 text-sm shadow-sm flex items-center gap-3">
-                                        <Info size={20} className="text-orange-500" />
-                                        No active patient selected. Start a consultation from the Waiting Room first.
-                                    </div>
-                                )}
-                                {/* Medication Lines */}
-                                <div className="space-y-4 mb-6">
-                                    {prescriptionForm.map((med, index) => (
-                                        <div key={index} className="flex flex-col md:flex-row gap-4 bg-white/60 backdrop-blur-md p-5 rounded-[32px] border border-white shadow-sm hover:shadow-md transition-all">
-                                            <div className="flex-1">
-                                                <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-2 pl-1">Medicine Name</label>
-                                                <GlassInput
-                                                    placeholder="e.g. Amoxicillin 500mg"
-                                                    value={med.name}
-                                                    onChange={(e) => updateMedicine(index, 'name', e.target.value)}
-                                                    disabled={!currentPatient}
-                                                    className="bg-white/80 border-slate-200 focus:ring-2 focus:ring-blue-500/30 text-sm"
-                                                />
+                                    <div className={`absolute -bottom-6 -right-6 w-24 h-24 rounded-full bg-gradient-to-br ${stat.color} opacity-10 blur-2xl`}></div>
+                                </motion.div>
+                            ))}
+                        </div>
+
+                        {/* Today's Patients Row */}
+                        <div className="space-y-4">
+                            <h3 className="text-base font-semibold text-[var(--color-text-primary)] flex items-center gap-2">
+                                <Users size={18} className="text-blue-600" /> Today's Patients <span className="text-xs bg-blue-100 text-blue-700 px-2 rounded-full font-bold">{todaysPatients}</span>
+                            </h3>
+                            {todaysAppointments.length === 0 ? (
+                                <div className="p-6 bg-blue-50/50 rounded-2xl border border-blue-100 text-center flex flex-col items-center">
+                                    <CalendarX className="text-gray-400 mb-2" size={32} />
+                                    <p className="text-sm font-bold text-gray-400">No patients scheduled for today</p>
+                                </div>
+                            ) : (
+                                <div className="flex overflow-x-auto pb-4 gap-4 snap-x hide-scrollbar">
+                                    {todaysAppointments.map((apt) => (
+                                        <div key={apt.id} className="min-w-[240px] bg-white border border-slate-100 rounded-2xl p-4 shadow-sm snap-start hover:-translate-y-1 transition-transform group">
+                                            <div className="flex items-center gap-3 mb-3">
+                                                <div className="w-10 h-10 bg-gradient-to-br from-blue-100 to-indigo-50 text-blue-600 rounded-full flex items-center justify-center font-bold shadow-sm shrink-0">
+                                                    {apt.patientName?.charAt(0) || 'P'}
+                                                </div>
+                                                <div className="truncate">
+                                                    <p className="font-bold text-[var(--color-text-primary)] truncate">{apt.patientName}</p>
+                                                    <p className="text-[10px] text-slate-500 font-semibold">{apt.patientPhone || 'No phone'}</p>
+                                                </div>
                                             </div>
-                                            <div className="w-full md:w-1/3">
-                                                <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-2 pl-1">Dosage (M-A-E-N)</label>
-                                                <GlassInput
-                                                    placeholder="e.g. 1-0-1-0"
-                                                    value={med.dosage}
-                                                    onChange={(e) => updateMedicine(index, 'dosage', e.target.value)}
-                                                    disabled={!currentPatient}
-                                                    className="bg-white/80 border-slate-200 focus:ring-2 focus:ring-blue-500/30 text-sm"
-                                                />
-                                            </div>
-                                            <div className="w-full md:w-32">
-                                                <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-2 pl-1">Quantity</label>
-                                                <GlassInput
-                                                    type="number"
-                                                    placeholder="e.g. 10"
-                                                    value={med.quantity}
-                                                    onChange={(e) => updateMedicine(index, 'quantity', e.target.value)}
-                                                    disabled={!currentPatient}
-                                                    className="bg-white/80 border-slate-200 focus:ring-2 focus:ring-blue-500/30 text-sm"
-                                                />
+                                            <div className="flex items-center justify-between mt-3 pt-3 border-t border-slate-50">
+                                                <span className="text-[10px] font-bold text-slate-400 uppercase flex items-center gap-1 shrink-0">
+                                                    <Clock size={12} /> {apt.startTime} - {apt.endTime}
+                                                </span>
+                                                <span className={`text-[10px] uppercase font-bold px-2 py-0.5 rounded-full shrink-0 ${apt.status?.toUpperCase() === 'PENDING' ? 'bg-amber-50 text-amber-600' : (apt.status?.toUpperCase()==='COMPLETED' ? 'bg-emerald-50 text-emerald-600' : 'bg-red-50 text-red-600')}`}>
+                                                    {apt.status}
+                                                </span>
                                             </div>
                                         </div>
                                     ))}
                                 </div>
+                            )}
+                        </div>
 
-                                <div className="flex items-center justify-between border-t border-slate-200 mt-6 pt-6">
-                                    <GlassButton variant="secondary" onClick={addMedicineRow} disabled={!currentPatient} className="px-4 py-2 text-blue-600">
-                                        <Plus size={16} className="mr-2" /> Add Medicine
-                                    </GlassButton>
+                        {/* Waiting Queue */}
+                        <Card>
+                            <div className="space-y-4">
+                                <h3 className="text-base font-semibold text-[var(--color-text-primary)] flex items-center gap-2">
+                                    <Clock size={18} className="text-amber-600" /> Waiting Room
+                                </h3>
+                                {pendingAppointments.length === 0 ? (
+                                    <EmptyState icon={Users} title="No patients waiting" description="Your schedule is clear for now." />
+                                ) : (
+                                    <div className="relative border-l-2 border-blue-100 pl-6 ml-14 space-y-6 mt-4">
+                                        <div className="absolute top-1/3 -left-[5px] w-[calc(100%+30px)] flex items-center z-10 pointer-events-none">
+                                            <div className="w-2 h-2 rounded-full bg-red-500"></div>
+                                            <div className="h-[2px] bg-red-500/50 flex-1 ml-1 rounded-full"></div>
+                                            <span className="text-[10px] bg-red-50 text-red-600 px-2 rounded-full absolute -top-2 right-0 font-bold border border-red-100 backdrop-blur-md">Current Time</span>
+                                        </div>
+                                        {pendingAppointments.map((apt, i) => (
+                                        <div key={apt.id} className="relative group">
+                                            <div className="absolute -left-[31.5px] top-4 w-3.5 h-3.5 bg-white border-2 border-blue-500 rounded-full shadow-sm"></div>
+                                            <div className="absolute -left-[68px] top-3 w-10 text-right">
+                                                <span className="text-xs font-extrabold text-slate-500">{apt.startTime ? apt.startTime.slice(0,5) : '10:00'}</span>
+                                            </div>
+                                            <div className="flex flex-col sm:flex-row sm:items-center justify-between p-4 bg-white hover:bg-blue-50/30 shadow-sm hover:shadow-md transition-all rounded-2xl border border-slate-100">
+                                                <div className="flex items-start gap-4 max-w-[65%]">
+                                                    <div className="w-10 h-10 bg-[var(--color-primary-light)] text-[var(--color-primary)] rounded-full flex items-center justify-center font-bold text-sm shadow-inner shrink-0">
+                                                        {apt.patientName?.charAt(0) || 'P'}
+                                                    </div>
+                                                    <div className="min-w-0">
+                                                        <div className="flex items-center gap-2">
+                                                            <p className="font-bold text-slate-800 truncate">{apt.patientName}</p>
+                                                            <span className="text-[10px] font-bold bg-amber-100 text-amber-600 px-2 py-0.5 rounded-full flex items-center gap-1 border border-amber-200 shrink-0">
+                                                                <Clock size={10} /> Pending
+                                                            </span>
+                                                        </div>
+                                                        <p className="text-[10px] font-semibold text-slate-400 mt-0.5">{apt.appointmentDate} · {apt.patientPhone || 'No phone'}</p>
+                                                        <p className="text-[11px] font-medium text-slate-500 mt-1.5 truncate italic border-l-2 border-slate-200 pl-2" title={apt.problemDescription || 'No description provided'}>
+                                                            {apt.problemDescription || 'General Checkup Consultation'}
+                                                        </p>
+                                                    </div>
+                                                </div>
+                                                <div className="flex items-center gap-2 mt-4 sm:mt-0 shrink-0">
+                                                    <Button variant="ghost" size="sm" icon={Brain} loading={isAISummarizing} onClick={handleAISummarize} className="opacity-0 group-hover:opacity-100 transition-opacity">
+                                                        Summarize
+                                                    </Button>
+                                                    <Button size="sm" icon={Video} onClick={() => handleStartConsultation(apt)}>
+                                                        Start Call
+                                                    </Button>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
+                        </Card>
+                    </motion.div>
+                )}
 
-                                    <motion.div layout>
-                                        <GlassButton
-                                            onClick={() => {
-                                                setHasSentPrescription(true);
-                                                setTimeout(() => {
-                                                    handleSendPrescription();
-                                                    setHasSentPrescription(false);
-                                                }, 1000);
-                                            }}
-                                            disabled={!currentPatient || prescriptionForm[0].name === '' || hasSentPrescription}
-                                            className={`px-8 py-3 overflow-hidden relative ${hasSentPrescription ? 'bg-emerald-600 shadow-[0_0_20px_rgba(16,185,129,0.5)] text-white' : 'bg-indigo-600 hover:bg-indigo-700 shadow-indigo-500/30'}`}
-                                        >
-                                            <AnimatePresence mode="wait">
-                                                {hasSentPrescription ? (
-                                                    <motion.div
-                                                        key="success"
-                                                        initial={{ y: 20, opacity: 0 }}
-                                                        animate={{ y: 0, opacity: 1 }}
-                                                        className="flex items-center justify-center gap-2"
-                                                    >
-                                                        <Check size={20} className="text-white" />
-                                                        <span>Sent Complete</span>
-                                                    </motion.div>
-                                                ) : (
-                                                    <motion.div
-                                                        key="default"
-                                                        initial={{ y: -20, opacity: 0 }}
-                                                        animate={{ y: 0, opacity: 1 }}
-                                                        exit={{ y: 20, opacity: 0 }}
-                                                        className="flex items-center justify-center"
-                                                    >
-                                                        Send to Pharmacy
-                                                    </motion.div>
-                                                )}
-                                            </AnimatePresence>
-                                        </GlassButton>
-                                    </motion.div>
+                {/* ─── APPOINTMENTS MASTER TAB ─── */}
+                {activeTab === 'appointments' && (
+                    <motion.div key="appointments" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="space-y-6">
+                        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                            <h2 className="text-xl font-bold text-slate-800 tracking-tight">Appointments</h2>
+                            <div className="flex flex-wrap gap-3 w-full md:w-auto">
+                                <div className="relative flex-1 md:w-64">
+                                    <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                                    <input 
+                                        type="text" 
+                                        placeholder="Search patients..." 
+                                        value={searchQuery}
+                                        onChange={(e) => setSearchQuery(e.target.value)}
+                                        className="w-full pl-9 pr-4 py-2 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)] transition-all bg-white"
+                                    />
                                 </div>
-                            </GlassCard>
-                        </motion.div>
+                                <select 
+                                    value={statusFilter}
+                                    onChange={(e) => setStatusFilter(e.target.value)}
+                                    className="px-4 py-2 rounded-xl border border-slate-200 text-sm focus:outline-none bg-white text-slate-700 font-medium"
+                                >
+                                    <option value="All">All Status</option>
+                                    <option value="Pending">Pending</option>
+                                    <option value="Completed">Completed</option>
+                                    <option value="Cancelled">Cancelled</option>
+                                </select>
+                                <select 
+                                    value={dateFilter}
+                                    onChange={(e) => setDateFilter(e.target.value)}
+                                    className="px-4 py-2 rounded-xl border border-slate-200 text-sm focus:outline-none bg-white text-slate-700 font-medium"
+                                >
+                                    <option value="All">All Time</option>
+                                    <option value="Today">Today</option>
+                                    <option value="This Week">This Week</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div className="space-y-8">
+                            {groupedAppointments.length === 0 ? (
+                                <EmptyState icon={Calendar} title="No appointments found" description="Try adjusting your filters or search query." />
+                            ) : (
+                                groupedAppointments.map((group, gIdx) => (
+                                    <div key={gIdx} className="space-y-4">
+                                        <h3 className="text-sm font-bold text-slate-500 uppercase tracking-widest pl-2 border-l-2 border-[var(--color-primary)]">{group.label}</h3>
+                                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+                                            {group.items.map(apt => (
+                                                <div key={apt.id} className="bg-white border border-slate-100 rounded-2xl p-5 shadow-sm hover:shadow-md transition-shadow group relative overflow-hidden flex flex-col h-full">
+                                                    <div className={`absolute top-0 left-0 w-1 h-full ${apt.status?.toUpperCase()==='COMPLETED'?'bg-emerald-400':(apt.status?.toUpperCase()==='PENDING'?'bg-amber-400':'bg-red-400')}`}></div>
+                                                    <div className="flex items-start justify-between mb-4">
+                                                        <div className="flex items-center gap-3">
+                                                            <div className="w-10 h-10 bg-[var(--color-primary-light)] text-[var(--color-primary)] rounded-full flex items-center justify-center font-bold shadow-sm shrink-0">
+                                                                {apt.patientName?.charAt(0) || 'P'}
+                                                            </div>
+                                                            <div>
+                                                                <p className="font-bold text-slate-800 leading-tight">{apt.patientName}</p>
+                                                                <p className="text-[10px] font-semibold text-slate-400 mt-0.5">{apt.patientPhone || 'No phone'}</p>
+                                                            </div>
+                                                        </div>
+                                                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded uppercase ${apt.status?.toUpperCase()==='COMPLETED'?'bg-emerald-50 text-emerald-600 border border-emerald-100':(apt.status?.toUpperCase()==='PENDING'?'bg-amber-50 text-amber-600 border border-amber-100':'bg-red-50 text-red-600 border border-red-100')}`}>
+                                                            {apt.status}
+                                                        </span>
+                                                    </div>
+                                                    
+                                                    <div className="bg-slate-50 rounded-xl p-3 mb-4 flex-1">
+                                                        <div className="flex items-center gap-2 mb-2">
+                                                            <Clock size={12} className="text-slate-400" />
+                                                            <span className="text-xs font-bold text-slate-600">{apt.startTime} - {apt.endTime}</span>
+                                                        </div>
+                                                        <p className="text-[11px] text-slate-500 font-medium line-clamp-2" title={apt.problemDescription || 'No description'}>
+                                                            <span className="font-bold text-slate-600 mr-1">Reason:</span>
+                                                            {apt.problemDescription || 'General Checkup Consultation'}
+                                                        </p>
+                                                    </div>
+
+                                                    <div className="mt-auto">
+                                                        {(apt.status?.toUpperCase() === 'PENDING') ? (
+                                                            <div className="flex gap-2">
+                                                                <Button variant="secondary" size="sm" icon={CheckCircle} onClick={() => handleMarkComplete(apt.id)} className="w-full justify-center !py-2 bg-emerald-50 text-emerald-600 hover:bg-emerald-100 border-emerald-100">
+                                                                    Mark Complete
+                                                                </Button>
+                                                            </div>
+                                                        ) : (
+                                                            <button disabled className="w-full py-2 bg-slate-50 text-slate-400 rounded-xl text-xs font-bold uppercase cursor-not-allowed">
+                                                                {apt.status}
+                                                            </button>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                ))
+                            )}
+                        </div>
+                    </motion.div>
+                )}
+
+                {/* ─── PATIENTS TAB ─── */}
+                {activeTab === 'patients' && (
+                    <motion.div key="patients" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="space-y-6">
+                        <h2 className="text-xl font-bold text-slate-800 tracking-tight">My Patients</h2>
+                        <Card className="!p-0 overflow-hidden">
+                            <Table
+                                columns={[
+                                    { header: 'Patient', render: (row) => (
+                                        <div className="flex items-center gap-3">
+                                            <div className="w-8 h-8 bg-[var(--color-primary-light)] text-[var(--color-primary)] rounded-full flex items-center justify-center text-xs font-bold shrink-0">
+                                                {row.patientName?.charAt(0) || 'P'}
+                                            </div>
+                                            <div className="flex flex-col">
+                                                <span className="font-bold text-[var(--color-text-primary)]">{row.patientName}</span>
+                                            </div>
+                                        </div>
+                                    )},
+                                    { header: 'Phone', render: (row) => <span className="text-sm font-semibold text-slate-500">{row.patientPhone || 'N/A'}</span> },
+                                    { header: 'Last Visit', render: (row) => <span className="text-sm text-slate-600 font-medium">{row.appointmentDate || 'N/A'}</span> },
+                                    { header: 'Visits', render: (row) => (
+                                        <div className="flex items-center justify-center w-8 h-8 rounded-full bg-blue-50 text-blue-600 font-bold text-xs ring-4 ring-white shadow-sm">
+                                            {localDoctorAppointments.filter(a => a.patientId === row.patientId).length}
+                                        </div>
+                                    )},
+                                ]}
+                                data={uniquePatients}
+                                emptyMessage="No patients found"
+                                emptyIcon={Users}
+                            />
+                        </Card>
+                    </motion.div>
+                )}
+
+                {/* ─── PRESCRIPTIONS TAB ─── */}
+                {activeTab === 'prescriptions' && (
+                    <motion.div key="prescriptions" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="space-y-6">
+                        <h2 className="text-xl font-bold text-slate-800 tracking-tight">Sent Prescriptions</h2>
+                        <Card className="!p-0 overflow-hidden">
+                            <Table
+                                columns={[
+                                    { header: 'Patient', render: (row) => <span className="font-medium text-[var(--color-text-primary)]">{row.patientName}</span> },
+                                    { header: 'Medication', render: (row) => row.medicines?.map(m => m.name).join(', ') || 'N/A' },
+                                    { header: 'Date', accessor: 'date' },
+                                    { header: 'Status', render: (row) => (
+                                        <span className={`text-xs font-medium px-2 py-1 rounded-full ${
+                                            row.status === 'ready' ? 'bg-emerald-50 text-emerald-600' : 'bg-amber-50 text-amber-600'
+                                        }`}>
+                                            {row.status}
+                                        </span>
+                                    )},
+                                ]}
+                                data={myPrescriptions}
+                                emptyMessage="No prescriptions sent yet"
+                                emptyIcon={FileText}
+                            />
+                        </Card>
+                    </motion.div>
+                )}
+
+                {/* ─── EARNINGS TAB ─── */}
+                {activeTab === 'earnings' && (
+                    <motion.div key="earnings" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="space-y-6">
+                        <h2 className="text-xl font-bold text-slate-800 tracking-tight">Earnings Overview</h2>
+                        <div className="grid grid-cols-12 gap-6">
+                            <Card className="col-span-12 lg:col-span-4 flex flex-col justify-between py-6 relative overflow-hidden bg-gradient-to-br from-emerald-50 to-teal-50 border-emerald-100/50">
+                                <div className="absolute top-0 right-0 w-32 h-32 bg-emerald-400 opacity-10 rounded-bl-full pointer-events-none"></div>
+                                <div className="z-10">
+                                    <div className="flex items-center justify-between mb-4">
+                                        <div className="w-12 h-12 bg-emerald-100 text-emerald-600 rounded-2xl flex items-center justify-center shadow-inner">
+                                            <DollarSign size={24} />
+                                        </div>
+                                        <span className="text-xs font-bold bg-emerald-100 text-emerald-700 px-2 py-1 rounded-full flex items-center gap-1">
+                                            <TrendingUp size={12} /> +12.5% MT
+                                        </span>
+                                    </div>
+                                    <p className="text-sm text-slate-500 font-bold uppercase tracking-wider mb-1">Total Earnings</p>
+                                    <p className="text-4xl font-extrabold text-slate-800">₹{earningsData.total_earnings?.toLocaleString() || '0'}</p>
+                                </div>
+
+                                {/* Custom Pure CSS Mini Bar Chart */}
+                                <div className="z-10 mt-8">
+                                    <div className="flex items-end justify-between h-20 gap-2">
+                                        {[40, 70, 45, 90, 60].map((val, i) => (
+                                            <div key={i} className="w-full flex-1 flex flex-col items-center gap-1">
+                                                <div className="w-full bg-emerald-100 rounded-t-md relative group">
+                                                    <div className="absolute bottom-0 w-full bg-emerald-400 rounded-t-md transition-all duration-500" style={{ height: `${val}%` }}></div>
+                                                    <div className="opacity-0 group-hover:opacity-100 absolute -top-8 left-1/2 -translate-x-1/2 bg-slate-800 text-white text-[10px] py-1 px-2 rounded font-bold transition-opacity z-20">₹{val * 50}</div>
+                                                </div>
+                                                <span className="text-[10px] text-slate-400 font-bold">{['Mon','Tue','Wed','Thu','Fri'][i]}</span>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            </Card>
+                            <Card className="col-span-12 lg:col-span-8 !p-0 overflow-hidden">
+                                <div className="p-6 pb-2">
+                                    <h3 className="text-base font-semibold text-[var(--color-text-primary)]">Consultation History</h3>
+                                </div>
+                                <Table
+                                    columns={[
+                                        { header: 'Date', render: (row) => new Date(row.consultation_date).toLocaleDateString() },
+                                        { header: 'Patient ID', accessor: 'patient_id' },
+                                        { header: 'Notes', render: (row) => <span className="truncate block max-w-[200px]">{row.notes || 'N/A'}</span> },
+                                        { header: 'Fee', align: 'right', render: (row) => <span className="font-semibold text-[var(--color-primary)]">₹{row.fee || 0}</span> },
+                                    ]}
+                                    data={earningsData.history || []}
+                                    emptyMessage="No earnings data yet"
+                                    emptyIcon={DollarSign}
+                                />
+                            </Card>
+                        </div>
+                    </motion.div>
+                )}
+            </AnimatePresence>
+
+            {/* Prescription Modal */}
+            <Modal isOpen={showPrescriptionModal} onClose={() => { setShowPrescriptionModal(false); setRxStep(1); setPrescriptionForm([]); }} title="Write Prescription" size="md">
+                <div className="space-y-6">
+                    {/* Stepper Header */}
+                    <div className="flex items-center justify-between mb-4 relative before:absolute before:top-1/2 before:left-0 before:w-full before:h-0.5 before:bg-slate-100 before:-z-10">
+                        {[{s:1, l:'Patient'}, {s:2, l:'Medicines'}, {s:3, l:'Review'}].map(step => (
+                            <div key={step.s} className="flex flex-col items-center gap-1 bg-white px-2">
+                                <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold transition-all ${rxStep >= step.s ? 'bg-[var(--color-primary)] text-white shadow-md ring-4 ring-blue-50' : 'bg-slate-100 text-slate-400'}`}>
+                                    {rxStep > step.s ? <CheckCircle size={14} /> : step.s}
+                                </div>
+                                <span className={`text-[10px] font-bold ${rxStep >= step.s ? 'text-[var(--color-primary)]' : 'text-slate-400'}`}>{step.l}</span>
+                            </div>
+                        ))}
+                    </div>
+
+                    {/* Step 1 */}
+                    {rxStep === 1 && (
+                        <div className="space-y-4 animate-in fade-in slide-in-from-right-4">
+                            <label className="text-sm font-bold text-[var(--color-text-primary)]">Select Patient</label>
+                            <div className="border border-[var(--color-primary-light)] bg-blue-50/50 p-4 rounded-2xl flex items-center gap-4">
+                                <div className="w-12 h-12 bg-white rounded-full flex items-center justify-center font-bold text-[var(--color-primary)] shadow-sm">
+                                    {currentPatient?.patientName?.charAt(0) || 'P'}
+                                </div>
+                                <div>
+                                    <h4 className="font-bold text-[var(--color-text-primary)]">{currentPatient?.patientName || 'Loading...'}</h4>
+                                    <p className="text-xs text-[var(--color-text-secondary)]">{currentPatient?.timeSlot}</p>
+                                </div>
+                            </div>
+                            <Button className="w-full mt-4" onClick={() => setRxStep(2)}>Continue to Medicines</Button>
+                        </div>
                     )}
 
-                    {/* PATIENTS & HISTORY (PLACEHOLDERS) */}
-                    {activeTab === 'patients' && (
-                        <motion.div key="patients" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }}>
-                            <GlassCard className="p-12 text-center text-slate-500">
-                                <Users size={48} className="mx-auto mb-4 text-blue-200" />
-                                <h3 className="text-xl font-semibold text-slate-700 mb-2">Patient Directory</h3>
-                                <p className="font-medium">Global patient search and directory modules are restricted.</p>
-                            </GlassCard>
-                        </motion.div>
+                    {/* Step 2 */}
+                    {rxStep === 2 && (
+                        <div className="space-y-4 animate-in fade-in slide-in-from-right-4">
+                            <label className="text-sm font-bold text-[var(--color-text-primary)]">Add Instructions (Press Enter to add)</label>
+                            <input
+                                placeholder="E.g. Paracetamol 500mg 1-0-1"
+                                className="w-full px-4 py-3 input-field focus:input-field-focus text-sm"
+                                value={medInput}
+                                onChange={(e) => setMedInput(e.target.value)}
+                                onKeyDown={(e) => {
+                                    if (e.key === 'Enter' && medInput.trim()) {
+                                        e.preventDefault();
+                                        setPrescriptionForm(prev => [...prev, { name: medInput.trim(), dosage: 'As prescribed', quantity: '1 strip' }]);
+                                        setMedInput('');
+                                    }
+                                }}
+                            />
+                            <div className="flex flex-wrap gap-2 mt-2 min-h-[60px] p-3 border border-dashed border-slate-200 rounded-xl bg-slate-50">
+                                {prescriptionForm.length === 0 ? (
+                                    <span className="text-xs text-slate-400 m-auto">No medicines added yet</span>
+                                ) : (
+                                    prescriptionForm.map((med, i) => (
+                                        <div key={i} className="flex items-center gap-2 bg-blue-100 text-blue-700 px-3 py-1.5 rounded-full text-xs font-bold shadow-sm">
+                                            <Pill size={12} /> {med.name}
+                                            <button onClick={() => setPrescriptionForm(p => p.filter((_, idx) => idx !== i))} className="hover:bg-blue-200 p-0.5 rounded-full transition-colors"><X size={12} /></button>
+                                        </div>
+                                    ))
+                                )}
+                            </div>
+                            <div className="flex gap-3 pt-4">
+                                <Button variant="secondary" onClick={() => setRxStep(1)}>Back</Button>
+                                <Button className="flex-1" onClick={() => setRxStep(3)} disabled={prescriptionForm.length === 0}>Review Prescription</Button>
+                            </div>
+                        </div>
                     )}
 
-                    {activeTab === 'history' && (
-                        <motion.div key="history" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }}>
-                            <GlassCard className="p-12 text-center text-slate-500">
-                                <FileText size={48} className="mx-auto mb-4 text-blue-200" />
-                                <h3 className="text-xl font-semibold text-slate-700 mb-2">Consultation History</h3>
-                                <p className="font-medium">View your past completed appointments and generated reports here.</p>
-                            </GlassCard>
-                        </motion.div>
+                    {/* Step 3 */}
+                    {rxStep === 3 && (
+                        <div className="space-y-6 animate-in fade-in slide-in-from-right-4">
+                            <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100">
+                                <h4 className="text-sm font-bold text-[var(--color-text-primary)] mb-4 flex items-center justify-between border-b pb-2">
+                                    Final Review
+                                    <span className="text-[10px] bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full">{prescriptionForm.length} Items</span>
+                                </h4>
+                                <ul className="space-y-2">
+                                    {prescriptionForm.map((med, i) => (
+                                        <li key={i} className="flex items-center gap-2 text-sm text-[var(--color-text-secondary)]">
+                                            <Check size={14} className="text-emerald-500" /> {med.name}
+                                        </li>
+                                    ))}
+                                </ul>
+                            </div>
+                            <div className="flex gap-3">
+                                <Button variant="secondary" onClick={() => setRxStep(2)}>Edit</Button>
+                                <Button className="flex-1" icon={Send} onClick={() => { handleSendPrescription(); setRxStep(1); setShowPrescriptionModal(false); }}>Confirm & Send</Button>
+                            </div>
+                        </div>
                     )}
+                </div>
+            </Modal>
 
-                </AnimatePresence>
-            </div >
-
-            <FloatingAssistant />
-        </main >
+            {/* Video Consultation */}
+            {inCall && <VideoConsultation onExit={handleEndConsultation} />}
+        </AppLayout>
     );
 };
+
+export default DoctorDashboard;

@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { motion, useSpring, useTransform } from 'framer-motion';
 
-export const ParallaxWrapper = ({ children, className = '', depth = 1 }) => {
+const ParallaxWrapper = ({ children, className = '', depth = 1 }) => {
     // depth: 1 = background (moves slightly slower), 3 = foreground (moves faster)
     const [mousePosition, setMousePosition] = useState({ x: 0, y: 0 });
 
@@ -45,3 +45,5 @@ export const ParallaxWrapper = ({ children, className = '', depth = 1 }) => {
         </motion.div>
     );
 };
+
+export default ParallaxWrapper;

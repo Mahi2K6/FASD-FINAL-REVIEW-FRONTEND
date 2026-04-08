@@ -2,7 +2,7 @@ import React from 'react';
 import { Mail, Phone, MapPin, Twitter, Send, Linkedin } from 'lucide-react';
 import { motion } from 'framer-motion';
 
-export const GlobalFooter = () => {
+const GlobalFooter = () => {
     return (
         <motion.footer
             initial={{ opacity: 0, y: 40 }}
@@ -23,7 +23,7 @@ export const GlobalFooter = () => {
                     {/* Column 1: Brand */}
                     <div className="flex flex-col items-start text-left">
                         <div className="flex items-center gap-3 mb-6">
-                            <div className="w-10 h-10 rounded-xl bg-white/5 backdrop-blur-md shadow-sm border border-white/10 flex items-center justify-center p-1.5 grayscale brightness-200">
+                            <div className="w-10 h-10 rounded-2xl bg-white/5 backdrop-blur-md shadow-sm border border-white/10 flex items-center justify-center p-1.5 grayscale brightness-200">
                                 <img src="/medconnect.png" alt="MedConnect Logo" className="w-full h-full object-contain" />
                             </div>
                             <div className="flex flex-col">
@@ -100,3 +100,5 @@ export const GlobalFooter = () => {
         </motion.footer>
     );
 };
+
+export default GlobalFooter;
