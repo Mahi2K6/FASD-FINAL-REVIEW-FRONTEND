@@ -161,11 +161,16 @@ const ProfileMenu = () => {
 
     const handleUpdateProfile = async () => {
         try {
-            const res = await API.put(`/update-profile`, { user_id: currentUser.id, ...profileForm });
+            console.log("API Request:", {
+                endpoint: '/users/profile',
+                method: 'PUT',
+                payload: { user_id: currentUser.id, ...profileForm }
+            });
+            const res = await API.put(`/users/profile`, { user_id: currentUser.id, ...profileForm });
             const result = res.data;
             
-            if (result.success) {
-                const updatedUsers = data.users.map(u => u.id === currentUser.id ? { ...u, ...profileForm } : u);
+            if (result.success || res.status === 200) {
+                const updatedUsers = data.users?.map(u => u.id === currentUser.id ? { ...u, ...profileForm } : u) || [];
                 updateData('users', updatedUsers);
                 
                 if (setCurrentUser) {
@@ -177,11 +182,11 @@ const ProfileMenu = () => {
                 showToast("Profile Updated Successfully");
                 closeModal('updateProfile');
             } else {
-                alert(result.error || "Update failed");
+                showToast(result.error || "Update failed");
             }
         } catch (error) {
             console.error(error);
-            alert("Network error.");
+            showToast(error.response?.data?.message || "Request failed");
         }
     };
 
@@ -237,40 +242,73 @@ const ProfileMenu = () => {
 
     return (
         <div className="relative inline-block text-left" ref={menuRef}>
-            {/* TRIGGER AVATAR */}
-            <div className="flex items-center gap-3 cursor-pointer" onClick={() => setIsOpen(!isOpen)}>
-                <div className="text-right hidden sm:block">
-                    <p className="text-sm font-semibold text-slate-800">{currentUser?.name || 'User'}</p>
-                    <p className="text-xs text-slate-400 uppercase tracking-wide">{currentUser?.role || 'Patient'}</p>
-                </div>
-                <motion.button
-                    whileHover={{ scale: 1.05 }}
-                    whileTap={{ scale: 0.95 }}
-                    title="Account Settings"
-                    className={`relative w-10 h-10 rounded-full flex items-center justify-center font-bold text-sm text-white shadow-sm pointer-events-auto border border-white overflow-hidden`}
-                    style={{ background: 'var(--brand-gradient)' }}
+            {/* TRIGGER — Compact Luxury Identity Capsule */}
+            <div 
+                className="group flex items-center cursor-pointer select-none" 
+                onClick={() => setIsOpen(!isOpen)}
+                style={{ gap: '10px', padding: '5px 14px 5px 5px' }}
+            >
+                {/* Avatar with contour glow ring — intensifies on hover */}
+                <motion.div
+                    whileHover={{ scale: 1.06 }}
+                    whileTap={{ scale: 0.94 }}
+                    className="relative shrink-0"
                 >
-                    {currentUser?.profile_picture ? (
-                        <img src={`${API_URL}${currentUser.profile_picture}`} alt="Profile" className="w-full h-full object-cover" />
-                    ) : (
-                        userInitial
-                    )}
-                </motion.button>
+                    <div
+                        className="w-[34px] h-[34px] rounded-full flex items-center justify-center font-semibold text-[13px] text-white overflow-hidden transition-shadow duration-300"
+                        style={{ 
+                            background: 'var(--brand-gradient)',
+                            boxShadow: '0 0 0 2.5px rgba(255,255,255,0.7), 0 0 0 4px rgba(37,99,235,0.12), 0 6px 16px rgba(37,99,235,0.15)',
+                        }}
+                        title="Account Settings"
+                    >
+                        {currentUser?.profile_picture ? (
+                            <img src={`${API_URL}${currentUser.profile_picture}`} alt="Profile" className="w-full h-full object-cover" />
+                        ) : (
+                            userInitial
+                        )}
+                    </div>
+                    {/* Active status dot */}
+                    <span 
+                        className="absolute -bottom-[1px] -right-[1px] w-[10px] h-[10px] rounded-full border-[2px] border-white transition-all duration-300 group-hover:scale-110"
+                        style={{ background: 'linear-gradient(135deg, #22c55e, #16a34a)' }}
+                    />
+                </motion.div>
+
+                {/* User Info Stack — sharpens on hover */}
+                <div className="hidden sm:flex flex-col items-end leading-none">
+                    <span className="text-[13px] font-semibold text-slate-700 tracking-[-0.01em] transition-all duration-300 group-hover:text-slate-900">{currentUser?.name || 'User'}</span>
+                    <span className="text-[9.5px] font-semibold text-slate-400/70 uppercase tracking-[0.14em] mt-[2px] transition-all duration-300 group-hover:text-slate-500/80">{currentUser?.role || 'Patient'}</span>
+                </div>
             </div>
 
             {/* DROPDOWN MENU */}
             <AnimatePresence>
                 {isOpen && (
                     <motion.div
-                        initial={{ opacity: 0, scale: 0.95, y: -5 }}
-                        animate={{ opacity: 1, scale: 1, y: 0 }}
-                        exit={{ opacity: 0, scale: 0.95, y: -5, transition: { duration: 0.15 } }}
-                        className="absolute right-0 top-[calc(100%+8px)] w-64 bg-white border border-slate-100 rounded-3xl shadow-[0_30px_60px_-15px_rgba(0,0,0,0.15)] z-[99999] overflow-hidden pointer-events-auto flex flex-col"
-                        style={{ transformOrigin: 'top right' }}
+                        initial={{ opacity: 0, scale: 0.96, y: -8, filter: 'blur(8px)' }}
+                        animate={{ opacity: 1, scale: 1, y: 0, filter: 'blur(0px)' }}
+                        exit={{ opacity: 0, scale: 0.96, y: -4, filter: 'blur(4px)', transition: { duration: 0.12 } }}
+                        transition={{ type: 'spring', stiffness: 420, damping: 30, mass: 0.8 }}
+                        className="w-64 flex flex-col pointer-events-auto"
+                        style={{ 
+                            position: 'absolute',
+                            top: 'calc(100% + 12px)',
+                            right: '0',
+                            zIndex: 9999,
+                            transformOrigin: 'top right',
+                            borderRadius: '24px',
+                            background: 'rgba(255,255,255,0.82)',
+                            backdropFilter: 'blur(22px)',
+                            WebkitBackdropFilter: 'blur(22px)',
+                            border: '1px solid rgba(255,255,255,0.5)',
+                            boxShadow: '0 18px 50px rgba(15,23,42,0.10), 0 0 0 1px rgba(255,255,255,0.35), 0 0 30px rgba(72,145,255,0.08)',
+                            overflow: 'hidden'
+                        }}
                     >
                         {/* Header Area */}
-                        <div className="bg-slate-50/80 px-4 py-4 border-b border-slate-100 flex items-center gap-3">
-                            <div className="w-10 h-10 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center font-bold shadow-sm flex-shrink-0 overflow-hidden border border-blue-200/50">
+                        <div className="bg-slate-50/50 px-4 py-4 border-b border-slate-100/60 flex items-center gap-3">
+                            <div className="w-10 h-10 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center font-bold shadow-sm flex-shrink-0 overflow-hidden border border-blue-100/50">
                                 {currentUser?.profile_picture ? (
                                     <img src={`${API_URL}${currentUser.profile_picture}`} alt="Profile" className="w-full h-full object-cover" />
                                 ) : (
@@ -296,9 +334,9 @@ const ProfileMenu = () => {
                                             openModal(item.id);
                                         }
                                     }}
-                                    className="flex items-center gap-3 w-full px-3 py-2.5 text-sm font-medium text-slate-600 hover:text-slate-900 rounded-2xl hover:bg-slate-100/80 transition-all duration-200 group text-left"
+                                    className="flex items-center gap-3 w-full px-3 py-2.5 text-sm font-medium text-slate-600 hover:text-slate-800 rounded-xl hover:bg-slate-50 transition-all duration-150 group text-left"
                                 >
-                                    <span className="p-1.5 rounded-2xl bg-white shadow-sm border border-slate-100 group-hover:border-blue-100 text-blue-500 group-hover:text-blue-600 transition-colors">
+                                    <span className="p-1.5 rounded-xl bg-white shadow-sm border border-slate-100/60 group-hover:border-blue-100 text-slate-400 group-hover:text-blue-600 transition-colors">
                                         <item.icon size={16} />
                                     </span>
                                     {item.label}
@@ -308,7 +346,7 @@ const ProfileMenu = () => {
 
                             <button
                                 onClick={() => openModal('logoutConfirm')}
-                                className="flex items-center gap-3 w-full px-3 py-2.5 text-sm font-medium text-red-600 hover:text-red-700 rounded-2xl hover:bg-red-50 transition-all duration-200 group text-left"
+                                className="flex items-center gap-3 w-full px-3 py-2.5 text-sm font-medium text-red-500 hover:text-red-600 rounded-xl hover:bg-red-50/50 transition-all duration-150 group text-left"
                             >
                                 <span className="p-1.5 rounded-2xl bg-red-50 shadow-sm border border-red-100 group-hover:border-red-200 text-red-500 group-hover:text-red-600 transition-colors">
                                     <LogOut size={16} />
@@ -844,7 +882,7 @@ const ProfileMenu = () => {
                         initial={{ opacity: 0, y: 50, x: '-50%' }}
                         animate={{ opacity: 1, y: 0, x: '-50%' }}
                         exit={{ opacity: 0, y: 50, x: '-50%' }}
-                        className="fixed bottom-10 left-1/2 -ml-[50%] z-[200] bg-slate-800 text-white px-6 py-3 rounded-full shadow-2xl font-medium text-sm border border-slate-700 pointer-events-none whitespace-nowrap"
+                        className="fixed bottom-10 left-1/2 -ml-[50%] z-[200] bg-slate-900/95 backdrop-blur-xl text-white px-6 py-3 rounded-full shadow-[var(--shadow-xl)] font-medium text-sm border border-white/10 pointer-events-none whitespace-nowrap"
                     >
                         {toastMessage}
                     </motion.div>
@@ -864,7 +902,7 @@ const Modal = ({ children, overlay = true, onClickOut, fullScreen = false }) => 
             className="fixed inset-0 z-[9999] flex items-center justify-center p-4 sm:p-6"
             style={{ boxSizing: 'border-box' }}
         >
-            {overlay && <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-md" onClick={onClickOut} />}
+            {overlay && <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-xl" onClick={onClickOut} />}
             <motion.div
                 initial={{ scale: 0.96, opacity: 0 }}
                 animate={{ scale: 1, opacity: 1, transition: { type: 'spring', damping: 25, stiffness: 300 } }}

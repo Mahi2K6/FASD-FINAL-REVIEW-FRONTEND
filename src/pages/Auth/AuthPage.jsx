@@ -60,12 +60,23 @@ const AuthPage = ({ defaultIsSignUp = false }) => {
     const handleLogin = async (e) => {
         e.preventDefault();
         setLoginError('');
-        console.log("Login button clicked in AuthPage");
+
+        // Client-side validation
+        if (!credentials.email.trim()) {
+            setLoginError('Email address is required.');
+            return;
+        }
+        if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(credentials.email)) {
+            setLoginError('Please enter a valid email address.');
+            return;
+        }
+        if (!credentials.password) {
+            setLoginError('Password is required.');
+            return;
+        }
+
         const result = await login(credentials.email, credentials.password);
-        console.log("Login API result in AuthPage:", result);
-        console.log("FULL result object:", JSON.stringify(result));
         if (result.success && result.user) {
-            console.log("Logged in user:", result.user);
             const role = result.user.role?.toUpperCase();
             if (role === 'PATIENT') navigate('/patient-dashboard');
             else if (role === 'DOCTOR') navigate('/doctor-dashboard');
@@ -79,12 +90,28 @@ const AuthPage = ({ defaultIsSignUp = false }) => {
 
     const handleRegister = async (e) => {
         e.preventDefault();
-        console.log("Button clicked - Register started");
         setRegisterError('');
+
+        // Validate name
+        if (!formData.name.trim()) {
+            setRegisterError('Full name is required.');
+            return;
+        }
+
+        // Validate email
+        if (!formData.email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) {
+            setRegisterError('Please enter a valid email address.');
+            return;
+        }
+
+        // Validate password
+        if (!formData.password || formData.password.length < 6) {
+            setRegisterError('Password must be at least 6 characters.');
+            return;
+        }
 
         // Validate phone on submit
         if (!validatePhone(formData.phone)) {
-            console.log("Phone validation failed:", formData.phone);
             setPhoneError('Enter a valid 10-digit Indian mobile number');
             setPhoneSuccess(false);
             return;
@@ -99,10 +126,7 @@ const AuthPage = ({ defaultIsSignUp = false }) => {
         }
         setCaptchaError('');
 
-        console.log("Form valid, calling registerUser", { ...formData, role });
-        
         const result = await registerUser({ ...formData, role });
-        console.log("Register API result:", result);
 
         if (!result.success) {
             setRegisterError(result.error);
@@ -173,7 +197,7 @@ const AuthPage = ({ defaultIsSignUp = false }) => {
                     <div className="absolute -top-24 -left-24 w-96 h-96 bg-[var(--color-primary)]/30 rounded-full mix-blend-multiply filter blur-3xl"></div>
                 </div>
                 <div
-                    className="max-w-md w-full p-8 text-center relative z-10 glass-card !rounded-[20px]"
+                    className="max-w-lg w-full p-8 text-center relative z-10 glass-card !rounded-[20px]"
 
                 >
                     <div className="w-20 h-20 bg-[var(--color-primary-light)] rounded-full flex items-center justify-center mx-auto mb-6">
@@ -202,7 +226,7 @@ const AuthPage = ({ defaultIsSignUp = false }) => {
     }
 
     return (
-        <div className="min-h-screen flex items-center justify-center relative p-4 py-8 overflow-hidden font-sans" style={{ background: 'linear-gradient(135deg, #E8EFF8 0%, #F0F4F8 40%, #E3ECF5 100%)' }}>
+        <div className="min-h-screen flex items-center justify-center relative p-4 py-8 overflow-hidden font-sans" style={{ background: 'linear-gradient(145deg, #EBF2FA 0%, #F2F6FB 40%, #E6EFF9 100%)' }}>
             {/* Premium animated background orbs */}
             <div className="absolute inset-0 overflow-hidden pointer-events-none">
                 <div className="absolute -top-32 -left-32 w-[500px] h-[500px] rounded-full opacity-30" style={{ background: 'radial-gradient(circle, rgba(27,108,168,0.15) 0%, transparent 70%)', animation: 'pulse 8s ease-in-out infinite' }}></div>
@@ -214,7 +238,7 @@ const AuthPage = ({ defaultIsSignUp = false }) => {
             <div className="absolute inset-0 opacity-[0.03] pointer-events-none" style={{ backgroundImage: 'radial-gradient(circle at 1px 1px, #1B6CA8 0.5px, transparent 0)', backgroundSize: '32px 32px' }}></div>
 
             {/* Main Container */}
-            <div className="relative w-full max-w-[960px] min-h-[620px] bg-white rounded-[28px] overflow-hidden flex flex-col md:flex-row shadow-[0_20px_60px_rgba(15,28,46,0.12),0_8px_20px_rgba(15,28,46,0.08)] border border-white/80" style={{ padding: 0 }}>
+            <div className="relative w-full max-w-[960px] min-h-[620px] bg-white/98 backdrop-blur-xl rounded-2xl overflow-hidden flex flex-col md:flex-row shadow-[0_20px_60px_rgba(15,28,46,0.08),0_8px_20px_rgba(15,28,46,0.05)] border border-white/80" style={{ padding: 0 }}>
 
                 {/* --- LEFT SIDE: SIGN IN FORM --- */}
                 <div
@@ -222,14 +246,14 @@ const AuthPage = ({ defaultIsSignUp = false }) => {
                     ${isSignUp ? 'hidden md:flex md:translate-x-[100%] md:opacity-0 md:pointer-events-none' : 'flex md:translate-x-0 md:opacity-100'}`}
                 >
                     {/* Brand mark */}
-                    <div className="flex items-center gap-2.5 mb-8">
-                        <img src="/medconnect.png" alt="MedConnect" className="w-10 h-10 rounded-xl object-contain" />
-                        <span className="text-lg font-bold text-slate-800 tracking-tight">MedConnect</span>
+                    <div className="flex items-center gap-4 mb-12">
+                        <img src="/medconnect.png" alt="MedConnect" className="w-14 h-14 md:w-16 md:h-16 drop-shadow-sm rounded-xl object-contain" />
+                        <h1 className="text-3xl md:text-4xl font-bold tracking-tight text-slate-900">MedConnect</h1>
                     </div>
 
                     <div className="mb-8">
-                        <h2 className="text-[28px] font-extrabold text-slate-900 tracking-tight leading-tight">Welcome back</h2>
-                        <p className="text-slate-500 mt-1.5 text-[15px] font-normal">Sign in to access your healthcare dashboard</p>
+                        <h2 className="text-5xl font-bold text-slate-900 tracking-tight leading-tight">Welcome back</h2>
+                        <p className="text-slate-500 text-lg mt-2">Sign in to access your healthcare dashboard</p>
                     </div>
 
                     {loginError && (
@@ -265,7 +289,7 @@ const AuthPage = ({ defaultIsSignUp = false }) => {
                                     placeholder="Enter your email"
                                     value={credentials.email}
                                     onChange={(e) => { setCredentials({ ...credentials, email: e.target.value }); setLoginError(''); }}
-                                    className={`w-full pl-12 pr-4 py-3 text-[15px] bg-slate-50 border rounded-xl outline-none transition-all duration-200 placeholder:text-slate-400 ${loginError ? 'border-red-200 bg-red-50/30 focus:border-red-300 focus:ring-2 focus:ring-red-100' : 'border-slate-200 hover:border-slate-300 focus:border-[#1B6CA8] focus:ring-2 focus:ring-[#1B6CA8]/10 focus:bg-white'}`}
+                                    className={`w-full pl-12 pr-4 py-3 text-[15px] bg-slate-50 border rounded-xl outline-none transition-all duration-200 placeholder:text-slate-400 ${loginError ? 'border-red-200 bg-red-50/30 focus:border-red-300 focus:ring-2 focus:ring-red-100' : 'border-slate-200 hover:border-slate-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-500 focus:bg-white'}`}
                                     required
                                 />
                             </div>
@@ -282,22 +306,20 @@ const AuthPage = ({ defaultIsSignUp = false }) => {
                                     placeholder="Enter your password"
                                     value={credentials.password}
                                     onChange={(e) => { setCredentials({ ...credentials, password: e.target.value }); setLoginError(''); }}
-                                    className={`w-full pl-12 pr-4 py-3 text-[15px] bg-slate-50 border rounded-xl outline-none transition-all duration-200 placeholder:text-slate-400 ${loginError ? 'border-red-200 bg-red-50/30 focus:border-red-300 focus:ring-2 focus:ring-red-100' : 'border-slate-200 hover:border-slate-300 focus:border-[#1B6CA8] focus:ring-2 focus:ring-[#1B6CA8]/10 focus:bg-white'}`}
+                                    className={`w-full pl-12 pr-4 py-3 text-[15px] bg-slate-50 border rounded-xl outline-none transition-all duration-200 placeholder:text-slate-400 ${loginError ? 'border-red-200 bg-red-50/30 focus:border-red-300 focus:ring-2 focus:ring-red-100' : 'border-slate-200 hover:border-slate-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-500 focus:bg-white'}`}
                                     required
                                 />
                             </div>
                         </div>
 
                         <div className="pt-2">
-                            <motion.button
-                                whileHover={{ scale: 1.01, translateY: -1 }}
-                                whileTap={{ scale: 0.98 }}
+                            <button
                                 type="submit"
-                                className="w-full py-3.5 text-[15px] bg-gradient-to-r from-[#1B6CA8] to-[#155E9A] text-white rounded-xl font-semibold shadow-[0_4px_16px_rgba(27,108,168,0.3)] hover:shadow-[0_8px_24px_rgba(27,108,168,0.35)] transition-all duration-300 flex items-center justify-center gap-2"
+                                className="w-full py-3.5 text-[15px] bg-gradient-to-r from-[#1B6CA8] to-[#155E9A] text-white rounded-xl font-semibold shadow-lg hover:shadow-[0_8px_24px_rgba(27,108,168,0.35)] transition-all duration-300 hover:scale-[1.02] flex items-center justify-center gap-2"
                             >
                                 Sign In
                                 <ArrowRight size={18} strokeWidth={2.5} />
-                            </motion.button>
+                            </button>
                         </div>
                     </form>
 

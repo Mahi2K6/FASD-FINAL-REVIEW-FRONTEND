@@ -1,44 +1,50 @@
 import React from 'react';
 
 // ─────────────────────────────────────────────
-// Skeleton primitives
+// Skeleton primitives — Clinical Luxury shimmer
 // ─────────────────────────────────────────────
 
-/** Generic shimmer rectangle */
+/** Generic shimmer rectangle with progressive reveal */
 const SkeletonBox = ({ className = '' }) => (
-    <div className={`animate-pulse bg-slate-100/80 rounded-3xl ${className}`} />
+    <div className={`relative overflow-hidden bg-slate-100/60 rounded-2xl ${className}`}>
+        <div 
+            className="absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-white/60 to-transparent"
+            style={{ animation: 'shimmer 1.8s infinite' }}
+        />
+    </div>
 );
 
-/** Full stat card skeleton — matches GlassCard stat layout */
+/** Full stat card skeleton */
 const SkeletonStatCard = () => (
-    <div className="bg-white/40 backdrop-blur-md rounded-3xl border border-white/60 p-5 flex flex-col gap-3 shadow-sm">
-        <SkeletonBox className="h-3 w-24 rounded-full" />
-        <SkeletonBox className="h-8 w-16 rounded-2xl" />
+    <div className="bg-white/60 backdrop-blur-md rounded-2xl border border-white/50 p-5 flex flex-col gap-3 shadow-[var(--shadow-xs)]">
+        <SkeletonBox className="h-3 w-24 !rounded-full" />
+        <SkeletonBox className="h-8 w-16 !rounded-xl" />
+        <SkeletonBox className="h-2 w-20 !rounded-full" />
     </div>
 );
 
 /** Row skeleton — for tables and list items */
 const SkeletonRow = ({ cols = 4 }) => (
-    <div className="flex items-center gap-4 py-4 border-b border-slate-50">
-        <SkeletonBox className="h-10 w-10 rounded-full flex-shrink-0" />
+    <div className="flex items-center gap-4 py-4 border-b border-slate-50/60">
+        <SkeletonBox className="h-10 w-10 !rounded-full flex-shrink-0" />
         {Array.from({ length: cols - 1 }).map((_, i) => (
             <SkeletonBox
                 key={i}
-                className={`h-3 rounded-full flex-1 ${i === cols - 2 ? 'max-w-[80px]' : ''}`}
+                className={`h-3 !rounded-full flex-1 ${i === cols - 2 ? 'max-w-[80px]' : ''}`}
             />
         ))}
     </div>
 );
 
-/** Card-level skeleton — matching full GlassCard proportions */
+/** Card-level skeleton */
 const SkeletonCard = ({ lines = 3, hasAvatar = false, className = '' }) => (
-    <div className={`bg-white/40 backdrop-blur-md rounded-3xl border border-white/60 p-6 flex flex-col gap-4 shadow-sm ${className}`}>
+    <div className={`bg-white/60 backdrop-blur-md rounded-2xl border border-white/50 p-6 flex flex-col gap-4 shadow-[var(--shadow-xs)] ${className}`}>
         {hasAvatar && (
             <div className="flex items-center gap-4 mb-2">
-                <SkeletonBox className="h-14 w-14 rounded-3xl flex-shrink-0" />
+                <SkeletonBox className="h-14 w-14 !rounded-2xl flex-shrink-0" />
                 <div className="flex-1 flex flex-col gap-2">
-                    <SkeletonBox className="h-4 w-32 rounded-full" />
-                    <SkeletonBox className="h-3 w-20 rounded-full" />
+                    <SkeletonBox className="h-4 w-32 !rounded-full" />
+                    <SkeletonBox className="h-3 w-20 !rounded-full" />
                 </div>
             </div>
         )}
@@ -46,7 +52,7 @@ const SkeletonCard = ({ lines = 3, hasAvatar = false, className = '' }) => (
             {Array.from({ length: lines }).map((_, i) => (
                 <SkeletonBox
                     key={i}
-                    className={`h-3.5 rounded-full ${i === lines - 1 ? 'w-2/3' : 'w-full'}`}
+                    className={`h-3.5 !rounded-full ${i === lines - 1 ? 'w-2/3' : 'w-full'}`}
                 />
             ))}
         </div>
@@ -55,18 +61,18 @@ const SkeletonCard = ({ lines = 3, hasAvatar = false, className = '' }) => (
 
 /** Specialized Doctor profile skeleton */
 const SkeletonDoctorCard = () => (
-    <div className="bg-white/40 backdrop-blur-md rounded-3xl border border-white/60 p-8 flex flex-col gap-6 shadow-sm">
+    <div className="bg-white/60 backdrop-blur-md rounded-2xl border border-white/50 p-8 flex flex-col gap-6 shadow-[var(--shadow-xs)]">
         <div className="flex items-center gap-6">
-            <SkeletonBox className="h-20 w-20 rounded-3xl flex-shrink-0" />
+            <SkeletonBox className="h-20 w-20 !rounded-2xl flex-shrink-0" />
             <div className="space-y-3 flex-1">
-                <SkeletonBox className="h-6 w-48 rounded-full" />
-                <SkeletonBox className="h-3 w-32 rounded-full" />
-                <SkeletonBox className="h-2.5 w-24 rounded-full" />
+                <SkeletonBox className="h-6 w-48 !rounded-full" />
+                <SkeletonBox className="h-3 w-32 !rounded-full" />
+                <SkeletonBox className="h-2.5 w-24 !rounded-full" />
             </div>
         </div>
         <div className="grid grid-cols-2 gap-4 mt-2">
-            <SkeletonBox className="h-12 rounded-3xl" />
-            <SkeletonBox className="h-12 rounded-3xl" />
+            <SkeletonBox className="h-12 !rounded-xl" />
+            <SkeletonBox className="h-12 !rounded-xl" />
         </div>
     </div>
 );

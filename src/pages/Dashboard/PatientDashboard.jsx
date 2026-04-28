@@ -13,7 +13,7 @@ import {
 import { AreaChart, Area, ResponsiveContainer, XAxis, YAxis, CartesianGrid, Tooltip } from 'recharts';
 import { useAppContext } from '../../AppContext';
 import API from '../../api';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import AppLayout from '../../components/layout/AppLayout';
 import Card from '../../components/ui/Card';
 import Button from '../../components/ui/Button';
@@ -22,8 +22,10 @@ import EmptyState from '../../components/ui/EmptyState';
 import Table from '../../components/ui/Table';
 import Modal from '../../components/ui/Modal';
 import SkeletonLoader from '../../components/ui/SkeletonLoader';
-import VideoConsultation from '../../components/ui/VideoConsultation';
-import AISymptomChecker from '../../components/ui/AISymptomChecker';
+import PatientPrescriptions from '../Prescriptions/PatientPrescriptions';
+import PatientRatingModal from '../../components/ui/PatientRatingModal';
+
+
 import { useToast } from '../../components/ui/ToastNotification';
 
 // Auto-redirect helper for success screen
@@ -44,13 +46,22 @@ const PatientDashboard = () => {
     const navigate = useNavigate();
     const toast = useToast();
 
-    const [activeTab, setActiveTab] = useState('overview');
+    const location = useLocation();
+    
+    // Derive activeTab from the URL path instead of isolated state
+    // Handles both /dashboard and /patient-dashboard base paths
+    const pathSegment = location.pathname.split('/').pop();
+    const activeTab = (() => {
+        if (pathSegment === 'find-doctors') return 'doctors';
+        if (['overview', 'doctors', 'appointments', 'prescriptions', 'records'].includes(pathSegment)) return pathSegment;
+        return 'overview'; // fallback for /dashboard, /patient-dashboard, or any unknown sub-path
+    })();
     const [searchQuery, setSearchQuery] = useState('');
     const [selectedSpecialty, setSelectedSpecialty] = useState('All');
     const [selectedDoctor, setSelectedDoctor] = useState(null);
     const [bookingStep, setBookingStep] = useState('select');
     const [bookingDetails, setBookingDetails] = useState({ problem: '' });
-    const [inCall, setInCall] = useState(false);
+
     const [isProcessingPayment, setIsProcessingPayment] = useState(false);
     const [isBooking, setIsBooking] = useState(false);
     const [medicalRecords, setMedicalRecords] = useState([]);
@@ -68,6 +79,10 @@ const PatientDashboard = () => {
     const [cardDetails, setCardDetails] = useState({ number: '', expiry: '', cvv: '', name: '' });
     const [selectedBank, setSelectedBank] = useState('');
     const bookingRef = useRef(false);
+    
+    // ── Rating Modal State ──
+    const [showRatingModal, setShowRatingModal] = useState(false);
+    const [ratingAppointment, setRatingAppointment] = useState(null);
 
     const BOOKING_STEPS = [
         { key: 'select', label: 'Doctor' },
@@ -120,7 +135,7 @@ const PatientDashboard = () => {
         const uniqueAppts = [...new Map(localAppointments.map(a => [a.id, a])).values()];
         
         return uniqueAppts
-            .filter(a => a.appointmentDate && a.startTime)
+            .filter(a => (a.appointmentDate || a.date || a.selectedDate) && (a.startTime || a.timeSlot))
             .map(a => {
                 // cross-reference against doctors array
                 const doc = doctors.find(d => String(d.id) === String(a.doctorId));
@@ -131,7 +146,7 @@ const PatientDashboard = () => {
                     doctorName: doc ? `Dr. ${doc.name}` : `Dr. Unknown`,
                     doctorSpecialty: doc?.specialization || a.doctorSpecialization || '—',
                     doctorAvatar: doc?.profileImageUrl || (doc ? doc.name.charAt(0) : 'D'),
-                    date: a.appointmentDate,
+                    date: a.appointmentDate || a.date || a.selectedDate,
                     startTime: a.startTime,
                     endTime: a.endTime,
                     status: a.status
@@ -139,12 +154,33 @@ const PatientDashboard = () => {
             });
     }, [localAppointments, doctors]);
 
+    const normalizeSpecialty = (specialty) => {
+        const value = specialty?.toLowerCase().trim();
+
+        if (
+            value === "general medicine" ||
+            value === "general physician" ||
+            value === "physician"
+        ) return "general";
+
+        if (value?.includes("cardio")) return "cardiology";
+        if (value?.includes("neuro")) return "neurology";
+        if (value?.includes("derma")) return "dermatology";
+        if (value?.includes("pedia")) return "pediatrics";
+        if (value?.includes("ortho")) return "orthopedics";
+
+        return value;
+    };
+
     const filteredDoctors = useMemo(() => {
         return doctors.filter(d => {
             const matchesSearch = !searchQuery ||
                 d.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
                 d.specialization?.toLowerCase().includes(searchQuery.toLowerCase());
-            const matchesSpec = selectedSpecialty === 'All' || d.specialization === selectedSpecialty;
+            
+            const matchesSpec = selectedSpecialty === 'All' || 
+                normalizeSpecialty(d.specialization) === normalizeSpecialty(selectedSpecialty);
+                
             return matchesSearch && matchesSpec;
         });
     }, [doctors, searchQuery, selectedSpecialty]);
@@ -198,6 +234,11 @@ const PatientDashboard = () => {
         formData.append('patient_id', currentUser.id);
         formData.append('record_type', 'Lab Report');
 
+        console.log("API Request:", {
+            endpoint: '/upload-file',
+            method: 'POST',
+            payload: formData
+        });
         API.post(`/upload-file`, formData)
             .then(res => res.data)
             .then(() => {
@@ -205,12 +246,21 @@ const PatientDashboard = () => {
                 API.get(`/medical-records/${currentUser.id}`)
                     .then(r => setMedicalRecords(r.data || []));
             })
-            .catch(() => setIsUploading(false));
+            .catch((err) => {
+                setIsUploading(false);
+                toast.error(err.response?.data?.message || "Upload failed");
+            });
     };
 
     // ─── Centralized Formatters ───
 
     // Format 24h time ("14:30") to 12h ("2:30 PM"); pass-through if already formatted
+    const formatSafeDate = (val) => {
+        if (!val) return 'No Date';
+        const parsedDate = new Date(val);
+        return isNaN(parsedDate.getTime()) ? 'No Date' : parsedDate.toLocaleDateString('en-GB');
+    };
+
     const formatTime = (time) => {
         if (!time) return '';
         if (/AM|PM/i.test(time)) return time;
@@ -268,10 +318,44 @@ const PatientDashboard = () => {
         }
     };
 
-    // Fetch appointments on component mount
+    // ── Real-time Prescription Sync Polling ──
+    useEffect(() => {
+        if (!currentUser?.id) return;
+        
+        const pollInterval = setInterval(async () => {
+            try {
+                const res = await API.get(`/prescriptions`);
+                const latestPrescriptions = (res.data || []).filter(p => String(p.patientId) === String(currentUser.id));
+                
+                if (latestPrescriptions.length > myPrescriptions.length) {
+                    toast.success('New Prescription', 'Your doctor has issued a new prescription.');
+                    updateData('prescriptions', res.data);
+                }
+            } catch (err) {
+                // fail silently
+            }
+        }, 15000);
+
+        return () => clearInterval(pollInterval);
+    }, [currentUser?.id, myPrescriptions.length, updateData]);
+
     useEffect(() => {
         fetchMyAppointments();
     }, [currentUser?.id]);
+
+    // ── Catch Rating State from VideoCall ──
+    useEffect(() => {
+        if (location.state?.showRating && location.state?.appointmentId) {
+            if (localAppointments.length > 0) {
+                const apt = myAppointments.find(a => String(a.id) === String(location.state.appointmentId));
+                if (apt) {
+                    setRatingAppointment(apt);
+                    setShowRatingModal(true);
+                }
+                navigate(location.pathname, { replace: true, state: {} });
+            }
+        }
+    }, [location.state, localAppointments, navigate, location.pathname, myAppointments]);
 
     const handleBookAppointment = async () => {
         if (!selectedSlot || !selectedDoctor || isBooking) return;
@@ -279,7 +363,7 @@ const PatientDashboard = () => {
         bookingRef.current = true;
 
         if (!selectedSlot?.id) {
-            toast.error('Invalid Slot', 'Please select a valid time slot.');
+            toast.error('Invalid slot. Please reselect.');
             bookingRef.current = false;
             return;
         }
@@ -302,22 +386,54 @@ const PatientDashboard = () => {
 
             // Mock payment (fire-and-forget)
             try {
-                await API.post('/payments/mock', {
+                const mockPayload = {
                     doctorId: selectedDoctor.id,
                     patientId: currentUser.id,
                     amount: consultationFee,
                     date: selectedDate,
                     timeSlot: selectedSlot.startTime || selectedSlot.time,
-                });
+                };
+                console.log("API Request:", { endpoint: '/payments/mock', method: 'POST', payload: mockPayload });
+                await API.post('/payments/mock', mockPayload);
             } catch { /* optional endpoint */ }
 
+            // Ensure strict string formatting for times
+            let sTime = String(selectedSlot.startTime || selectedSlot.time || "09:00:00");
+            if (sTime.split(':').length === 2) sTime += ":00"; // Ensure HH:MM:SS
+            
+            let eTime = String(selectedSlot.endTime || "00:00:00");
+            if (eTime === "00:00:00" && sTime !== "00:00:00") {
+                // Approximate 30m end time if missing
+                const [h, m] = sTime.split(':').map(Number);
+                const endM = (m + 30) % 60;
+                const endH = h + Math.floor((m + 30) / 60);
+                eTime = `${String(endH).padStart(2, '0')}:${String(endM).padStart(2, '0')}:00`;
+            } else if (eTime.split(':').length === 2) {
+                eTime += ":00";
+            }
+
             // Book — exact backend contract
+            // Sending 'date' and 'time' as plain strings to bypass backend Jackson LocalDate parsing issues
             const payload = {
-                slotId: selectedSlot.id,
-                patientId: currentUser.id,
-                problemDescription: bookingDetails.problem
+                patientId: Number(currentUser.id),
+                doctorId: Number(selectedDoctor.id),
+                slotId: Number(selectedSlot.id),
+                date: String(selectedDate), 
+                time: sTime,
+                paymentStatus: "PAID",
+                status: "BOOKED",
+                problemDescription: String(bookingDetails.problem || "Consultation")
             };
-            await API.post('/appointments', payload);
+
+            console.log("Selected Slot:", selectedSlot);
+            console.log("Selected Doctor:", selectedDoctor);
+            console.log("Appointment Payload (Strict JSON):", JSON.stringify(payload, null, 2));
+
+            await API.post('/appointments', payload, {
+                headers: {
+                    'Content-Type': 'application/json'
+                }
+            });
 
             toast.success('Booked!', 'Appointment confirmed.');
 
@@ -337,18 +453,20 @@ const PatientDashboard = () => {
             fetchData();
             setBookingStep('success');
         } catch (err) {
+            console.error("Booking failed:", err.response?.data || err.message);
             if (err.response?.status === 409) {
                 toast.error('Slot already booked');
                 await fetchSlots(false);
                 setSelectedSlot(null);
-                return;
             } else if (err.response?.status === 400) {
                 toast.error('Invalid Slot', err?.response?.data?.message || 'This slot is no longer valid.');
                 await fetchSlots(true);
                 setSelectedSlot(null);
             } else {
-                toast.error('Failed', err?.response?.data?.message || 'Something went wrong.');
+                toast.error('Failed', err?.response?.data?.message || 'Something went wrong. Please try again.');
             }
+            // Keep user on the payment/booking step if it fails
+            setBookingStep('payment'); 
         } finally {
             setIsBooking(false);
             setIsProcessingPayment(false);
@@ -358,7 +476,7 @@ const PatientDashboard = () => {
 
     if (loadingDb) {
         return (
-            <AppLayout activeTab={activeTab} setActiveTab={setActiveTab}>
+            <AppLayout activeTab={activeTab} setActiveTab={() => {}}>
                 <div className="flex items-center justify-center h-64">
                     <Loader2 size={32} className="text-[var(--color-primary)] animate-spin" />
                 </div>
@@ -369,53 +487,57 @@ const PatientDashboard = () => {
     const nextAppointment = myAppointments.find(a => a.status === 'scheduled');
 
     return (
-        <AppLayout activeTab={activeTab} setActiveTab={setActiveTab}>
+        <AppLayout activeTab={activeTab} setActiveTab={() => {}}>
             <AnimatePresence mode="wait">
                 {/* ─── OVERVIEW TAB ─── */}
                 {activeTab === 'overview' && (
                     <motion.div key="overview" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="space-y-6">
-                        {/* Welcome */}
-                        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                            <div>
-                                <h2 className="text-2xl font-bold text-slate-800 tracking-tight">
-                                    <span className="font-normal text-slate-500">{new Date().getHours() < 12 ? 'Good morning,' : new Date().getHours() < 18 ? 'Good afternoon,' : 'Good evening,'}</span> <span className="font-bold text-slate-800">{currentUser?.name?.split(' ')[0]}</span>
-                                </h2>
-                                <p className="text-[var(--color-text-secondary)] text-sm mt-1">Check your health updates and appointments.</p>
+                        {/* Welcome Hero Card */}
+                        <motion.div
+                            initial={{ opacity: 0, y: 12 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
+                            className="relative overflow-hidden rounded-[var(--radius-xl)] p-6 md:p-8"
+                            style={{
+                                background: 'rgba(255,255,255,0.72)',
+                                backdropFilter: 'blur(24px) saturate(160%)',
+                                WebkitBackdropFilter: 'blur(24px) saturate(160%)',
+                                border: '1px solid rgba(255,255,255,0.65)',
+                                boxShadow: '0 8px 32px rgba(15,23,42,0.06), 0 0 0 1px rgba(255,255,255,0.5), inset 0 1px 0 rgba(255,255,255,0.7)',
+                            }}
+                        >
+                            {/* Gradient accent line */}
+                            <div className="absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-blue-500 via-cyan-400 to-indigo-500 opacity-60" />
+                            
+                            {/* Ambient glow */}
+                            <div className="absolute -top-20 -right-20 w-60 h-60 rounded-full bg-gradient-to-br from-blue-400/[0.06] to-cyan-400/[0.04] blur-3xl pointer-events-none" />
+                            <div className="absolute -bottom-16 -left-16 w-40 h-40 rounded-full bg-gradient-to-tr from-indigo-400/[0.04] to-transparent blur-3xl pointer-events-none" />
+
+                            <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-4">
+                                <div>
+                                    <p className="text-[11px] font-bold text-blue-500/70 uppercase tracking-[0.15em] mb-1.5">
+                                        {new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
+                                    </p>
+                                    <h2 className="text-[26px] md:text-[30px] font-extrabold text-slate-800 tracking-tight leading-tight">
+                                        <span className="font-normal text-slate-400">{new Date().getHours() < 12 ? 'Good morning,' : new Date().getHours() < 18 ? 'Good afternoon,' : 'Good evening,'}</span>
+                                        <br className="sm:hidden" />
+                                        <span className="bg-clip-text text-transparent bg-gradient-to-r from-slate-800 to-slate-600"> {currentUser?.name?.split(' ')[0]}</span>
+                                    </h2>
+                                    <p className="text-slate-400 text-[13px] mt-1.5 font-medium">Check your health updates, appointments, and prescriptions.</p>
+                                </div>
+                                <div className="flex gap-2.5 shrink-0">
+                                    <Button variant="secondary" icon={Brain} onClick={() => setIsAIPanelOpen(true)}>AI Check</Button>
+                                    <Button icon={Plus} onClick={() => navigate('/dashboard/find-doctors')}>Book Appointment</Button>
+                                </div>
                             </div>
-                            <div className="flex gap-2">
-                                <Button variant="secondary" icon={Brain} onClick={() => setIsAIPanelOpen(true)}>AI Check</Button>
-                                <Button icon={Plus} onClick={() => setActiveTab('doctors')}>Book Appointment</Button>
-                            </div>
-                        </div>
+                        </motion.div>
 
                         {/* Stats Row */}
                         <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-6">
-                            {[
-                                { title: "Upcoming Appointments", value: myAppointments.length, color: "from-blue-500 to-indigo-600", iconColor: "text-blue-600", bgIcon: "bg-blue-100", icon: Calendar, subtitle: nextAppointment ? `Next: ${new Date(nextAppointment.date).toLocaleDateString('en-GB')}` : "No upcoming dates" },
-                                { title: "Active Prescriptions", value: myPrescriptions.length, color: "from-emerald-400 to-teal-500", iconColor: "text-emerald-600", bgIcon: "bg-emerald-100", icon: Pill, subtitle: "Currently active" },
-                                { title: "Doctors Consulted", value: new Set(myAppointments.map(a => a.doctorId)).size, color: "from-indigo-500 to-purple-600", iconColor: "text-indigo-600", bgIcon: "bg-indigo-100", icon: Stethoscope, subtitle: "Unique specialists" },
-                                { title: "Medical Records", value: medicalRecords.length, color: "from-rose-400 to-red-500", iconColor: "text-rose-600", bgIcon: "bg-rose-100", icon: FileText, subtitle: "Files securely stored" },
-                            ].map((stat, i) => (
-                                <motion.div 
-                                    key={i} 
-                                    whileHover={{ scale: 1.02 }} 
-                                    className="relative overflow-hidden rounded-2xl p-5 shadow-sm border border-white/40 bg-white/60 backdrop-blur-xl transition-all"
-                                >
-                                    <div className="relative z-10 flex items-center justify-between">
-                                        <div>
-                                            <p className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">{stat.title}</p>
-                                            <h3 className={`text-3xl font-extrabold bg-clip-text text-transparent bg-gradient-to-r ${stat.color} pb-1`}>
-                                                {stat.value}
-                                            </h3>
-                                            <p className="text-[10px] text-slate-400 mt-1 font-semibold">{stat.subtitle}</p>
-                                        </div>
-                                        <div className={`w-12 h-12 rounded-full ${stat.bgIcon} flex items-center justify-center shrink-0 shadow-inner`}>
-                                            <stat.icon size={22} className={stat.iconColor} />
-                                        </div>
-                                    </div>
-                                    <div className={`absolute -bottom-6 -right-6 w-24 h-24 rounded-full bg-gradient-to-br ${stat.color} opacity-10 blur-2xl`}></div>
-                                </motion.div>
-                            ))}
+                            <StatCard icon={Calendar} label="Upcoming Appointments" value={myAppointments.length} color="from-blue-500 to-indigo-600" subtitle={nextAppointment ? `Next: ${formatSafeDate(nextAppointment.date)}` : "No upcoming dates"} />
+                            <StatCard icon={Pill} label="Active Prescriptions" value={myPrescriptions.length} color="from-emerald-400 to-teal-500" subtitle="Currently active" />
+                            <StatCard icon={Stethoscope} label="Doctors Consulted" value={new Set(myAppointments.map(a => a.doctorId)).size} color="from-indigo-500 to-purple-600" subtitle="Unique specialists" />
+                            <StatCard icon={FileText} label="Medical Records" value={medicalRecords.length} color="from-rose-400 to-red-500" subtitle="Files securely stored" />
                         </div>
 
                         {/* Main Grid: 8 + 4 */}
@@ -439,14 +561,14 @@ const PatientDashboard = () => {
                                                 <span className="flex items-center gap-1"><Clock size={14} className="text-[var(--color-primary)]" /> {nextAppointment.startTime && nextAppointment.endTime ? `${formatTime(nextAppointment.startTime)} - ${formatTime(nextAppointment.endTime)}` : "—"}</span>
                                             </div>
                                         </div>
-                                        <Button icon={Video} onClick={() => setInCall(true)}>Join Call</Button>
+                                        <Button icon={Video} onClick={() => navigate(`/video-call/${nextAppointment.id || nextAppointment.appointmentId}`)}>Join Call</Button>
                                     </div>
                                     ) : (
                                         <EmptyState
                                             icon={Calendar}
                                             title="No upcoming consultations"
                                             description="Book a session with our specialists to get started."
-                                            action={<Button onClick={() => setActiveTab('doctors')}>Find a Doctor</Button>}
+                                            action={<Button onClick={() => navigate('/dashboard/find-doctors')}>Find a Doctor</Button>}
                                         />
                                     )}
                                 </div>
@@ -463,11 +585,11 @@ const PatientDashboard = () => {
                                         <AreaChart data={analytics.healthTrend}>
                                             <defs>
                                                 <linearGradient id="healthGrad" x1="0" y1="0" x2="0" y2="1">
-                                                    <stop offset="5%" stopColor="#10b981" stopOpacity={0.2} />
-                                                    <stop offset="95%" stopColor="#10b981" stopOpacity={0} />
+                                                    <stop offset="5%" stopColor="#14B8A6" stopOpacity={0.2} />
+                                                    <stop offset="95%" stopColor="#14B8A6" stopOpacity={0} />
                                                 </linearGradient>
                                             </defs>
-                                            <Area type="monotone" dataKey="value" stroke="#10b981" strokeWidth={2} fill="url(#healthGrad)" />
+                                            <Area type="monotone" dataKey="value" stroke="#14B8A6" strokeWidth={2} fill="url(#healthGrad)" />
                                             <Tooltip contentStyle={{ borderRadius: '18px', border: '1px solid #e5e7eb', boxShadow: '0 4px 12px rgba(0,0,0,0.08)' }} />
                                         </AreaChart>
                                     </ResponsiveContainer>
@@ -522,7 +644,7 @@ const PatientDashboard = () => {
                                                     <div key={apt.id || i} className="flex items-start gap-3 p-3 bg-white/40 border border-white/20 backdrop-blur-md rounded-2xl">
                                                         <div className={`w-2 h-2 rounded-full bg-${statusColor}-500 mt-2 shrink-0`} />
                                                         <div className="flex-1 min-w-0">
-                                                            <p className="text-xs text-[var(--color-text-secondary)] font-medium">{apt.date ? new Date(apt.date).toLocaleDateString() : '—'}</p>
+                                                            <p className="text-xs text-[var(--color-text-secondary)] font-medium">{formatSafeDate(apt.appointmentDate || apt.date || apt.selectedDate)}</p>
                                                             <p className="text-sm font-semibold text-[var(--color-text-primary)] truncate">Dr. {apt.doctorName}</p>
                                                             <p className="text-xs text-[var(--color-text-secondary)]">
                                                                 {apt.specialization !== '—' ? apt.specialization : ''}{apt.specialization !== '—' && apt.startTime ? ' • ' : ''}
@@ -584,33 +706,56 @@ const PatientDashboard = () => {
 
                         {bookingStep === 'select' && (
                             <>
-                                {/* Search + Filters */}
-                                <div className="flex flex-col md:flex-row gap-4">
-                                    <div className="flex-1 relative">
-                                        <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--color-text-secondary)]" />
-                                        <input
-                                            placeholder="Search by name or specialty..."
-                                            className="w-full pl-10 pr-4 py-2.5 input-field focus:input-field-focus placeholder-[var(--color-text-secondary)]/50 text-[var(--color-text-primary)]"
-                                            value={searchQuery}
-                                            onChange={(e) => setSearchQuery(e.target.value)}
-                                        />
+                                {/* ═══ Unified Filter Toolbar ═══ */}
+                                <motion.div
+                                    initial={{ opacity: 0, y: 12 }}
+                                    animate={{ opacity: 1, y: 0 }}
+                                    transition={{ delay: 0.08, type: 'spring', stiffness: 340, damping: 28 }}
+                                    className="mb-[22px]"
+                                    style={{
+                                        padding: '18px 22px',
+                                        borderRadius: '28px',
+                                        background: 'rgba(255,255,255,0.58)',
+                                        backdropFilter: 'blur(18px) saturate(150%)',
+                                        WebkitBackdropFilter: 'blur(18px) saturate(150%)',
+                                        border: '1px solid rgba(255,255,255,0.42)',
+                                        boxShadow: '0 12px 35px rgba(15,23,42,0.05)',
+                                    }}
+                                >
+                                    <div className="flex flex-col md:flex-row md:items-center gap-3">
+                                        {/* Search Input */}
+                                        <div className="relative w-full md:w-[320px] shrink-0">
+                                            <Search size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400/70" />
+                                            <input
+                                                placeholder="Search doctors, specialties..."
+                                                className="w-full pl-11 pr-4 bg-white/70 border border-slate-200/50 text-[13.5px] text-slate-700 placeholder:text-slate-400/60 outline-none focus:border-blue-300/50 focus:bg-white/90 focus:ring-2 focus:ring-blue-500/8 transition-all duration-200"
+                                                style={{ borderRadius: '18px', height: '52px' }}
+                                                value={searchQuery}
+                                                onChange={(e) => setSearchQuery(e.target.value)}
+                                            />
+                                        </div>
+
+                                        {/* Divider — desktop only */}
+                                        <div className="hidden md:block w-px h-7 bg-slate-200/50 shrink-0" />
+
+                                        {/* Specialty Filter Chips */}
+                                        <div className="flex flex-wrap items-center gap-[10px]">
+                                            {specialties.map(spec => (
+                                                <button
+                                                    key={spec}
+                                                    onClick={() => setSelectedSpecialty(spec)}
+                                                    className={`px-3.5 py-1.5 rounded-full text-[11.5px] font-semibold whitespace-nowrap transition-all duration-200 ${
+                                                        selectedSpecialty === spec
+                                                            ? 'bg-[var(--color-primary)] text-white shadow-sm'
+                                                            : 'bg-white/70 text-slate-500 border border-slate-200/50 hover:bg-white hover:text-[var(--color-primary)] hover:border-blue-200/50'
+                                                    }`}
+                                                >
+                                                    {spec}
+                                                </button>
+                                            ))}
+                                        </div>
                                     </div>
-                                    <div className="flex gap-1.5 overflow-x-auto pb-1">
-                                        {specialties.map(spec => (
-                                            <button
-                                                key={spec}
-                                                onClick={() => setSelectedSpecialty(spec)}
-                                                className={`px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap transition-colors ${
-                                                    selectedSpecialty === spec
-                                                        ? 'bg-[var(--color-primary)] text-white'
-                                                        : 'glass-pill text-[var(--color-text-secondary)] hover:bg-[var(--color-primary-light)] hover:text-[var(--color-primary)]'
-                                                }`}
-                                            >
-                                                {spec}
-                                            </button>
-                                        ))}
-                                    </div>
-                                </div>
+                                </motion.div>
 
                                 {/* Doctor Cards Grid */}
                                 {filteredDoctors.length === 0 ? (
@@ -1005,11 +1150,11 @@ const PatientDashboard = () => {
 
                                 <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.45 }} className="flex gap-3 justify-center">
                                     <Button variant="secondary" onClick={() => { setBookingStep('select'); setSelectedDoctor(null); setSelectedSlot(null); }}>Book Another</Button>
-                                    <Button onClick={() => { setBookingStep('select'); setSelectedDoctor(null); setSelectedSlot(null); setActiveTab('appointments'); }}>View Appointments</Button>
+                                    <Button onClick={() => { setBookingStep('select'); setSelectedDoctor(null); setSelectedSlot(null); navigate('/dashboard/appointments'); }}>View Appointments</Button>
                                 </motion.div>
 
                                 {/* Auto-redirect to appointments after 2.5s */}
-                                <AutoRedirect onRedirect={() => { setBookingStep('select'); setSelectedDoctor(null); setSelectedSlot(null); setActiveTab('appointments'); }} />
+                                <AutoRedirect onRedirect={() => { setBookingStep('select'); setSelectedDoctor(null); setSelectedSlot(null); navigate('/dashboard/appointments'); }} />
                             </Card>
                             </motion.div>
                         )}
@@ -1043,9 +1188,10 @@ const PatientDashboard = () => {
                                     { header: 'Specialty', accessor: 'doctorSpecialty', render: (row) => (
                                         <span className="text-[var(--color-text-secondary)]">{row.doctorSpecialty}</span>
                                     )},
-                                    { header: 'Date', accessor: 'date', render: (row) => (
-                                        <span>{row.date ? new Date(row.date).toLocaleDateString('en-GB') : '—'}</span>
-                                    )},
+                                    { header: 'Date', accessor: 'date', render: (row) => {
+                                        console.log("Appointment object:", row);
+                                        return <span>{formatSafeDate(row.appointmentDate || row.date || row.selectedDate)}</span>;
+                                    }},
                                     { header: 'Time', accessor: 'startTime', render: (row) => (
                                         <span>{row.startTime && row.endTime ? `${formatTime(row.startTime)} - ${formatTime(row.endTime)}` : '—'}</span>
                                     )},
@@ -1064,6 +1210,20 @@ const PatientDashboard = () => {
                                             <span className={`text-xs font-medium px-2 py-1 rounded-full capitalize ${color}`}>
                                                 {row.status}
                                             </span>
+                                        );
+                                    }},
+                                    { header: 'Actions', render: (row) => {
+                                        const s = (row.status || '').toLowerCase();
+                                        const canJoin = ['scheduled', 'confirmed', 'in-progress', 'pending'].includes(s);
+                                        if (!canJoin) return <span className="text-xs text-slate-400">—</span>;
+                                        return (
+                                            <button
+                                                onClick={(e) => { e.stopPropagation(); navigate(`/video-call/${row.id || row.appointmentId}`); }}
+                                                className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-gradient-to-r from-blue-500 to-indigo-600 text-white text-[11px] font-semibold rounded-full shadow-sm shadow-blue-500/20 hover:shadow-md hover:-translate-y-0.5 transition-all"
+                                            >
+                                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>
+                                                Join Call
+                                            </button>
                                         );
                                     }},
                                 ]}
@@ -1085,45 +1245,7 @@ const PatientDashboard = () => {
 
                 {/* ─── PRESCRIPTIONS TAB ─── */}
                 {activeTab === 'prescriptions' && (
-                    <motion.div key="prescriptions" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="space-y-6">
-                        <div className="flex items-center justify-between">
-                            <h2 className="text-xl font-bold text-slate-800 tracking-tight">Pharmacy & Prescriptions</h2>
-                        </div>
-                        {myPrescriptions.length === 0 ? (
-                            <EmptyState icon={Pill} title="No prescriptions yet" description="Your doctor will send prescriptions after consultations." />
-                        ) : (
-                            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-                                {myPrescriptions.map((rx) => (
-                                    <Card key={rx.id} className="hover:shadow-md transition-shadow">
-                                        <div className="flex items-start justify-between mb-4">
-                                            <div className="flex items-center gap-3">
-                                                <div className="w-10 h-10 bg-white/40 border border-white/20 backdrop-blur-md rounded-2xl flex items-center justify-center">
-                                                    <FileText size={18} className="text-[var(--color-text-secondary)]" />
-                                                </div>
-                                                <div>
-                                                    <p className="text-xs text-[var(--color-text-secondary)] font-medium">Prescribed By</p>
-                                                    <p className="font-semibold text-[var(--color-text-primary)]">Dr. {rx.doctorName}</p>
-                                                </div>
-                                            </div>
-                                            <span className="text-xs font-medium px-2 py-1 rounded-full bg-indigo-50 text-indigo-600">Verified</span>
-                                        </div>
-                                        <div className="space-y-2 mb-4">
-                                            {rx.medicines.map((med, j) => (
-                                                <div key={j} className="flex justify-between items-center p-2.5 bg-white/40 border border-white/20 backdrop-blur-md rounded-2xl text-sm">
-                                                    <div>
-                                                        <p className="font-medium text-[var(--color-text-primary)]">{med.name}</p>
-                                                        <p className="text-xs text-[var(--color-text-secondary)]">{med.dosage}</p>
-                                                    </div>
-                                                    <span className="text-xs text-[var(--color-text-secondary)]">{med.frequency || 'Daily'}</span>
-                                                </div>
-                                            ))}
-                                        </div>
-                                        <Button variant="primary" size="sm" className="w-full">Re-order Meds</Button>
-                                    </Card>
-                                ))}
-                            </div>
-                        )}
-                    </motion.div>
+                    <PatientPrescriptions prescriptions={myPrescriptions} />
                 )}
 
                 {/* ─── RECORDS TAB ─── */}
@@ -1165,9 +1287,16 @@ const PatientDashboard = () => {
                 )}
             </AnimatePresence>
 
-            {/* Overlays */}
-            <AISymptomChecker />
-            {inCall && <VideoConsultation onExit={() => setInCall(false)} />}
+            <PatientRatingModal 
+                isOpen={showRatingModal}
+                onClose={() => setShowRatingModal(false)}
+                appointment={ratingAppointment}
+                currentUser={currentUser}
+                onSuccess={() => {
+                    toast.success("Review Submitted", "Thank you for your feedback!");
+                }}
+            />
+
         </AppLayout>
     );
 };

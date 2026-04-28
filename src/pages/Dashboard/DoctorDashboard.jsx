@@ -10,7 +10,7 @@ import { AreaChart, Area, PieChart, Pie, Cell, ResponsiveContainer, XAxis, YAxis
 import { useAppContext } from '../../AppContext';
 import { useToast } from '../../components/ui/ToastNotification';
 import API from '../../api';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import AppLayout from '../../components/layout/AppLayout';
 import Card from '../../components/ui/Card';
 import Button from '../../components/ui/Button';
@@ -19,15 +19,22 @@ import EmptyState from '../../components/ui/EmptyState';
 import Table from '../../components/ui/Table';
 import Modal from '../../components/ui/Modal';
 import VideoConsultation from '../../components/ui/VideoConsultation';
+import PrescriptionForm from '../../components/ui/PrescriptionForm';
 
-const COMPLETION_COLORS = ['#1a6fc4', '#e8f1fb'];
+const COMPLETION_COLORS = ['#3B82F6', '#EFF6FF'];
 
 const DoctorDashboard = () => {
     const { data, currentUser, fetchData, loadingDb } = useAppContext();
     const toast = useToast();
     const navigate = useNavigate();
 
-    const [activeTab, setActiveTab] = useState('waiting');
+    const location = useLocation();
+
+    // Derive activeTab from URL path — no more stale local state
+    const pathSegment = location.pathname.split('/').pop();
+    const activeTab = (['waiting','appointments','patients','prescriptions','earnings'].includes(pathSegment))
+        ? pathSegment
+        : 'waiting';
     const [inCall, setInCall] = useState(false);
     const [currentPatient, setCurrentPatient] = useState(null);
     const [isAISummarizing, setIsAISummarizing] = useState(false);
@@ -177,6 +184,7 @@ const DoctorDashboard = () => {
 
     const handleMarkComplete = async (aptId) => {
         try {
+            console.log("API Request:", { endpoint: `/appointments/${aptId}/status`, method: 'PUT', payload: { status: 'COMPLETED' } });
             await API.put(`/appointments/${aptId}/status`, { status: 'COMPLETED' });
             toast.success('Success', 'Appointment marked as completed.');
             
@@ -184,13 +192,14 @@ const DoctorDashboard = () => {
                 a.id === aptId ? { ...a, status: 'COMPLETED' } : a
             ));
         } catch(err) {
-            toast.error('Error', 'Failed to update appointment status.');
+            toast.error('Error', err.response?.data?.message || 'Failed to update appointment status.');
         }
     };
 
     const handleStartConsultation = (apt) => {
         setCurrentPatient(apt);
-        setInCall(true);
+        // Navigate to the video consultation room
+        navigate(`/video-call/${apt.id || apt.appointmentId}`);
     };
 
     const handleEndConsultation = () => {
@@ -230,7 +239,7 @@ const DoctorDashboard = () => {
             setPrescriptionForm([{ name: '', dosage: '', quantity: '' }]);
             setCurrentPatient(null);
             setShowPrescriptionModal(false);
-            setActiveTab('waiting');
+            navigate('/doctor-dashboard/waiting');
         } catch (err) {
             console.error('Prescription error:', err);
         }
@@ -252,9 +261,25 @@ const DoctorDashboard = () => {
         fetchEarnings();
     }, [activeTab, currentUser?.id]);
 
+    // Handle return from VideoCall
+    useEffect(() => {
+        if (location.state?.showPrescription && location.state?.appointmentId) {
+            // Wait for localDoctorAppointments to populate if needed
+            if (localDoctorAppointments.length > 0) {
+                const apt = localDoctorAppointments.find(a => String(a.id) === String(location.state.appointmentId) || String(a.appointmentId) === String(location.state.appointmentId));
+                if (apt) {
+                    setCurrentPatient(apt);
+                    setShowPrescriptionModal(true);
+                }
+                // Clear state to prevent reopening on refresh
+                navigate(location.pathname, { replace: true, state: {} });
+            }
+        }
+    }, [location.state, localDoctorAppointments, navigate, location.pathname]);
+
     if (loadingDb) {
         return (
-            <AppLayout activeTab={activeTab} setActiveTab={setActiveTab}>
+            <AppLayout activeTab={activeTab} setActiveTab={() => {}}>
                 <div className="flex items-center justify-center h-64">
                     <Loader2 size={32} className="text-[var(--color-primary)] animate-spin" />
                 </div>
@@ -263,44 +288,46 @@ const DoctorDashboard = () => {
     }
 
     return (
-        <AppLayout activeTab={activeTab} setActiveTab={setActiveTab}>
+        <AppLayout activeTab={activeTab} setActiveTab={() => {}}>
             <AnimatePresence mode="wait">
                 {/* ─── WAITING ROOM ─── */}
                 {activeTab === 'waiting' && (
                     <motion.div key="waiting" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="space-y-6">
-                                <h2 className="text-2xl font-bold text-slate-800 tracking-tight">
-                                    <span className="font-normal text-slate-500">{new Date().getHours() < 12 ? 'Good morning,' : new Date().getHours() < 18 ? 'Good afternoon,' : 'Good evening,'}</span> <span className="font-bold text-slate-800">Dr. {currentUser?.name?.split(' ')[0]}</span>
+                        {/* Welcome Hero Card */}
+                        <motion.div
+                            initial={{ opacity: 0, y: 12 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
+                            className="relative overflow-hidden rounded-[var(--radius-xl)] p-6 md:p-8"
+                            style={{
+                                background: 'rgba(255,255,255,0.72)',
+                                backdropFilter: 'blur(24px) saturate(160%)',
+                                WebkitBackdropFilter: 'blur(24px) saturate(160%)',
+                                border: '1px solid rgba(255,255,255,0.65)',
+                                boxShadow: '0 8px 32px rgba(15,23,42,0.06), 0 0 0 1px rgba(255,255,255,0.5), inset 0 1px 0 rgba(255,255,255,0.7)',
+                            }}
+                        >
+                            <div className="absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-emerald-500 via-teal-400 to-blue-500 opacity-60" />
+                            <div className="absolute -top-20 -right-20 w-60 h-60 rounded-full bg-gradient-to-br from-emerald-400/[0.06] to-teal-400/[0.04] blur-3xl pointer-events-none" />
+                            <div className="relative z-10">
+                                <p className="text-[11px] font-bold text-emerald-500/70 uppercase tracking-[0.15em] mb-1.5">
+                                    {new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
+                                </p>
+                                <h2 className="text-[26px] md:text-[30px] font-extrabold text-slate-800 tracking-tight leading-tight">
+                                    <span className="font-normal text-slate-400">{new Date().getHours() < 12 ? 'Good morning,' : new Date().getHours() < 18 ? 'Good afternoon,' : 'Good evening,'}</span>
+                                    <span className="bg-clip-text text-transparent bg-gradient-to-r from-slate-800 to-slate-600"> Dr. {currentUser?.name?.split(' ')[0]}</span>
                                 </h2>
+                                <p className="text-slate-400 text-[13px] mt-1.5 font-medium">Your practice overview and patient queue.</p>
+                            </div>
+                        </motion.div>
 
                         {/* Stats */}
                         {/* Stats Row */}
                         <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-6">
-                            {[
-                                { title: "Today's Patients", value: todaysPatients, color: "from-blue-500 to-indigo-600", iconColor: "text-blue-600", bgIcon: "bg-blue-100", icon: Users, subtitle: "Total unique patients" },
-                                { title: "Pending", value: pending, color: "from-amber-400 to-orange-500", iconColor: "text-amber-600", bgIcon: "bg-amber-100", icon: Clock, subtitle: "In waiting room" },
-                                { title: "Completed", value: completed, color: "from-emerald-400 to-teal-500", iconColor: "text-emerald-600", bgIcon: "bg-emerald-100", icon: CheckCircle, subtitle: "Consultations finished" },
-                                { title: "Total Earnings", value: `₹${(completed * 500).toLocaleString()}`, color: "from-indigo-500 to-purple-600", iconColor: "text-indigo-600", bgIcon: "bg-indigo-100", icon: DollarSign, subtitle: "Today's revenue" },
-                            ].map((stat, i) => (
-                                <motion.div 
-                                    key={i} 
-                                    whileHover={{ scale: 1.02 }} 
-                                    className="relative overflow-hidden rounded-2xl p-5 shadow-sm border border-white/40 bg-white/60 backdrop-blur-xl transition-all"
-                                >
-                                    <div className="relative z-10 flex items-center justify-between">
-                                        <div>
-                                            <p className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">{stat.title}</p>
-                                            <h3 className={`text-3xl font-extrabold bg-clip-text text-transparent bg-gradient-to-r ${stat.color} pb-1`}>
-                                                {stat.value}
-                                            </h3>
-                                            <p className="text-[10px] text-slate-400 mt-1 font-semibold">{stat.subtitle}</p>
-                                        </div>
-                                        <div className={`w-12 h-12 rounded-full ${stat.bgIcon} flex items-center justify-center shrink-0 shadow-inner`}>
-                                            <stat.icon size={22} className={stat.iconColor} />
-                                        </div>
-                                    </div>
-                                    <div className={`absolute -bottom-6 -right-6 w-24 h-24 rounded-full bg-gradient-to-br ${stat.color} opacity-10 blur-2xl`}></div>
-                                </motion.div>
-                            ))}
+                            <StatCard icon={Users} label="Today's Patients" value={todaysPatients} color="from-blue-500 to-indigo-600" subtitle="Total unique patients" />
+                            <StatCard icon={Clock} label="Pending" value={pending} color="from-amber-400 to-orange-500" subtitle="In waiting room" />
+                            <StatCard icon={CheckCircle} label="Completed" value={completed} color="from-emerald-400 to-teal-500" subtitle="Consultations finished" />
+                            <StatCard icon={DollarSign} label="Total Earnings" value={`₹${(completed * 500).toLocaleString()}`} color="from-indigo-500 to-purple-600" subtitle="Today's revenue" />
                         </div>
 
                         {/* Today's Patients Row */}
@@ -400,40 +427,62 @@ const DoctorDashboard = () => {
                 {/* ─── APPOINTMENTS MASTER TAB ─── */}
                 {activeTab === 'appointments' && (
                     <motion.div key="appointments" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="space-y-6">
-                        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-                            <h2 className="text-xl font-bold text-slate-800 tracking-tight">Appointments</h2>
-                            <div className="flex flex-wrap gap-3 w-full md:w-auto">
-                                <div className="relative flex-1 md:w-64">
-                                    <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                        <motion.div
+                            initial={{ opacity: 0, y: 12 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            transition={{ delay: 0.08, type: 'spring', stiffness: 340, damping: 28 }}
+                            className="mb-[22px]"
+                            style={{
+                                padding: '18px 22px',
+                                borderRadius: '28px',
+                                background: 'rgba(255,255,255,0.55)',
+                                backdropFilter: 'blur(18px) saturate(150%)',
+                                WebkitBackdropFilter: 'blur(18px) saturate(150%)',
+                                border: '1px solid rgba(255,255,255,0.45)',
+                                boxShadow: '0 10px 30px rgba(15,23,42,0.05), inset 0 1px 0 rgba(255,255,255,0.45)',
+                            }}
+                        >
+                            <div className="flex flex-col md:flex-row md:items-center gap-3">
+                                {/* Search Input */}
+                                <div className="relative w-full md:w-[320px] shrink-0">
+                                    <Search size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400/70" />
                                     <input 
                                         type="text" 
                                         placeholder="Search patients..." 
                                         value={searchQuery}
                                         onChange={(e) => setSearchQuery(e.target.value)}
-                                        className="w-full pl-9 pr-4 py-2 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)] transition-all bg-white"
+                                        className="w-full pl-10 pr-4 bg-white/70 border border-slate-200/50 text-[13px] text-slate-700 placeholder:text-slate-400/60 outline-none focus:border-blue-300/50 focus:bg-white/90 focus:ring-2 focus:ring-blue-500/8 transition-all duration-200"
+                                        style={{ borderRadius: '18px', height: '44px' }}
                                     />
                                 </div>
-                                <select 
-                                    value={statusFilter}
-                                    onChange={(e) => setStatusFilter(e.target.value)}
-                                    className="px-4 py-2 rounded-xl border border-slate-200 text-sm focus:outline-none bg-white text-slate-700 font-medium"
-                                >
-                                    <option value="All">All Status</option>
-                                    <option value="Pending">Pending</option>
-                                    <option value="Completed">Completed</option>
-                                    <option value="Cancelled">Cancelled</option>
-                                </select>
-                                <select 
-                                    value={dateFilter}
-                                    onChange={(e) => setDateFilter(e.target.value)}
-                                    className="px-4 py-2 rounded-xl border border-slate-200 text-sm focus:outline-none bg-white text-slate-700 font-medium"
-                                >
-                                    <option value="All">All Time</option>
-                                    <option value="Today">Today</option>
-                                    <option value="This Week">This Week</option>
-                                </select>
+
+                                {/* Divider */}
+                                <div className="hidden md:block w-px h-7 bg-slate-200/50 shrink-0" />
+
+                                {/* Status & Date Filters */}
+                                <div className="flex flex-wrap items-center gap-[10px]">
+                                    <select 
+                                        value={statusFilter}
+                                        onChange={(e) => setStatusFilter(e.target.value)}
+                                        className="px-3.5 py-1.5 rounded-full text-[11.5px] font-semibold bg-white/70 border border-slate-200/50 text-slate-500 outline-none focus:border-blue-300/50 transition-all duration-200 cursor-pointer"
+                                    >
+                                        <option value="All">All Status</option>
+                                        <option value="Pending">Pending</option>
+                                        <option value="Completed">Completed</option>
+                                        <option value="Cancelled">Cancelled</option>
+                                    </select>
+                                    <select 
+                                        value={dateFilter}
+                                        onChange={(e) => setDateFilter(e.target.value)}
+                                        className="px-3.5 py-1.5 rounded-full text-[11.5px] font-semibold bg-white/70 border border-slate-200/50 text-slate-500 outline-none focus:border-blue-300/50 transition-all duration-200 cursor-pointer"
+                                    >
+                                        <option value="All">All Time</option>
+                                        <option value="Today">Today</option>
+                                        <option value="This Week">This Week</option>
+                                    </select>
+                                </div>
                             </div>
-                        </div>
+                        </motion.div>
 
                         <div className="space-y-8">
                             {groupedAppointments.length === 0 ? (
@@ -610,98 +659,17 @@ const DoctorDashboard = () => {
                 )}
             </AnimatePresence>
 
-            {/* Prescription Modal */}
-            <Modal isOpen={showPrescriptionModal} onClose={() => { setShowPrescriptionModal(false); setRxStep(1); setPrescriptionForm([]); }} title="Write Prescription" size="md">
-                <div className="space-y-6">
-                    {/* Stepper Header */}
-                    <div className="flex items-center justify-between mb-4 relative before:absolute before:top-1/2 before:left-0 before:w-full before:h-0.5 before:bg-slate-100 before:-z-10">
-                        {[{s:1, l:'Patient'}, {s:2, l:'Medicines'}, {s:3, l:'Review'}].map(step => (
-                            <div key={step.s} className="flex flex-col items-center gap-1 bg-white px-2">
-                                <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold transition-all ${rxStep >= step.s ? 'bg-[var(--color-primary)] text-white shadow-md ring-4 ring-blue-50' : 'bg-slate-100 text-slate-400'}`}>
-                                    {rxStep > step.s ? <CheckCircle size={14} /> : step.s}
-                                </div>
-                                <span className={`text-[10px] font-bold ${rxStep >= step.s ? 'text-[var(--color-primary)]' : 'text-slate-400'}`}>{step.l}</span>
-                            </div>
-                        ))}
-                    </div>
-
-                    {/* Step 1 */}
-                    {rxStep === 1 && (
-                        <div className="space-y-4 animate-in fade-in slide-in-from-right-4">
-                            <label className="text-sm font-bold text-[var(--color-text-primary)]">Select Patient</label>
-                            <div className="border border-[var(--color-primary-light)] bg-blue-50/50 p-4 rounded-2xl flex items-center gap-4">
-                                <div className="w-12 h-12 bg-white rounded-full flex items-center justify-center font-bold text-[var(--color-primary)] shadow-sm">
-                                    {currentPatient?.patientName?.charAt(0) || 'P'}
-                                </div>
-                                <div>
-                                    <h4 className="font-bold text-[var(--color-text-primary)]">{currentPatient?.patientName || 'Loading...'}</h4>
-                                    <p className="text-xs text-[var(--color-text-secondary)]">{currentPatient?.timeSlot}</p>
-                                </div>
-                            </div>
-                            <Button className="w-full mt-4" onClick={() => setRxStep(2)}>Continue to Medicines</Button>
-                        </div>
-                    )}
-
-                    {/* Step 2 */}
-                    {rxStep === 2 && (
-                        <div className="space-y-4 animate-in fade-in slide-in-from-right-4">
-                            <label className="text-sm font-bold text-[var(--color-text-primary)]">Add Instructions (Press Enter to add)</label>
-                            <input
-                                placeholder="E.g. Paracetamol 500mg 1-0-1"
-                                className="w-full px-4 py-3 input-field focus:input-field-focus text-sm"
-                                value={medInput}
-                                onChange={(e) => setMedInput(e.target.value)}
-                                onKeyDown={(e) => {
-                                    if (e.key === 'Enter' && medInput.trim()) {
-                                        e.preventDefault();
-                                        setPrescriptionForm(prev => [...prev, { name: medInput.trim(), dosage: 'As prescribed', quantity: '1 strip' }]);
-                                        setMedInput('');
-                                    }
-                                }}
-                            />
-                            <div className="flex flex-wrap gap-2 mt-2 min-h-[60px] p-3 border border-dashed border-slate-200 rounded-xl bg-slate-50">
-                                {prescriptionForm.length === 0 ? (
-                                    <span className="text-xs text-slate-400 m-auto">No medicines added yet</span>
-                                ) : (
-                                    prescriptionForm.map((med, i) => (
-                                        <div key={i} className="flex items-center gap-2 bg-blue-100 text-blue-700 px-3 py-1.5 rounded-full text-xs font-bold shadow-sm">
-                                            <Pill size={12} /> {med.name}
-                                            <button onClick={() => setPrescriptionForm(p => p.filter((_, idx) => idx !== i))} className="hover:bg-blue-200 p-0.5 rounded-full transition-colors"><X size={12} /></button>
-                                        </div>
-                                    ))
-                                )}
-                            </div>
-                            <div className="flex gap-3 pt-4">
-                                <Button variant="secondary" onClick={() => setRxStep(1)}>Back</Button>
-                                <Button className="flex-1" onClick={() => setRxStep(3)} disabled={prescriptionForm.length === 0}>Review Prescription</Button>
-                            </div>
-                        </div>
-                    )}
-
-                    {/* Step 3 */}
-                    {rxStep === 3 && (
-                        <div className="space-y-6 animate-in fade-in slide-in-from-right-4">
-                            <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100">
-                                <h4 className="text-sm font-bold text-[var(--color-text-primary)] mb-4 flex items-center justify-between border-b pb-2">
-                                    Final Review
-                                    <span className="text-[10px] bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full">{prescriptionForm.length} Items</span>
-                                </h4>
-                                <ul className="space-y-2">
-                                    {prescriptionForm.map((med, i) => (
-                                        <li key={i} className="flex items-center gap-2 text-sm text-[var(--color-text-secondary)]">
-                                            <Check size={14} className="text-emerald-500" /> {med.name}
-                                        </li>
-                                    ))}
-                                </ul>
-                            </div>
-                            <div className="flex gap-3">
-                                <Button variant="secondary" onClick={() => setRxStep(2)}>Edit</Button>
-                                <Button className="flex-1" icon={Send} onClick={() => { handleSendPrescription(); setRxStep(1); setShowPrescriptionModal(false); }}>Confirm & Send</Button>
-                            </div>
-                        </div>
-                    )}
-                </div>
-            </Modal>
+            {/* Prescription Form Component */}
+            <PrescriptionForm
+                isOpen={showPrescriptionModal}
+                onClose={() => setShowPrescriptionModal(false)}
+                currentPatient={currentPatient}
+                currentUser={currentUser}
+                onSuccess={() => {
+                    fetchData();
+                    navigate('/doctor-dashboard/waiting');
+                }}
+            />
 
             {/* Video Consultation */}
             {inCall && <VideoConsultation onExit={handleEndConsultation} />}

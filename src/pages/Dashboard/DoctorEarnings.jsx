@@ -10,7 +10,7 @@ import AppLayout from '../../components/layout/AppLayout';
 
 const DoctorEarnings = () => {
     const { currentUser } = useAppContext();
-    const [activeTab, setActiveTab] = useState('earnings');
+    const activeTab = 'earnings';
     const [earningsData, setEarningsData] = useState({ total_earnings: 0, history: [] });
     const [loading, setLoading] = useState(true);
 
@@ -40,7 +40,7 @@ const DoctorEarnings = () => {
     const chartData = processChartData(earningsData.history);
 
     return (
-        <AppLayout activeTab={activeTab} setActiveTab={setActiveTab}>
+        <AppLayout activeTab={activeTab} setActiveTab={() => {}}>
             {loading ? (
                 <div className="flex items-center justify-center h-64">
                     <Loader2 size={32} className="text-blue-600 animate-spin" />

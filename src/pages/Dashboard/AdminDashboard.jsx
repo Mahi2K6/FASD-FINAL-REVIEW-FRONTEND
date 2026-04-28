@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import { useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAppContext } from '../../AppContext';
 import API from '../../api';
@@ -10,7 +11,7 @@ import EmptyState from '../../components/ui/EmptyState';
 import { useToast } from '../../components/ui/ToastNotification';
 
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
-import { Activity, Users, CheckCircle, Settings, Check, X, GraduationCap, Store, Trash2, Star, Clock, BarChart3, TrendingUp, Loader2 } from 'lucide-react';
+import { Activity, Users, CheckCircle, Settings, Check, X, GraduationCap, Store, Trash2, Star, Clock, BarChart3, TrendingUp, Loader2, Search } from 'lucide-react';
 
 const AnimatedCount = ({ value }) => {
     const [count, setCount] = useState(0);
@@ -55,7 +56,13 @@ const AdminTopCard = ({ title, value, icon: Icon, gradient, sparkline }) => (
 );
 
 const AdminDashboard = () => {
-    const [activeTab, setActiveTab] = useState('analytics');
+    const location = useLocation();
+
+    // Derive activeTab from URL path — no more stale local state
+    const pathSegment = location.pathname.split('/').pop();
+    const activeTab = (['analytics','approvals','rejected','doctors','patients','pharmacists','settings'].includes(pathSegment))
+        ? pathSegment
+        : 'analytics';
     const { currentUser, data, updateData, setIsSearchGlobalVisible, loadingDb, fetchData } = useAppContext();
     const toast = useToast();
 
@@ -227,7 +234,7 @@ const AdminDashboard = () => {
 
     if (loadingDb || !currentUser) {
         return (
-            <AppLayout activeTab={activeTab} setActiveTab={setActiveTab}>
+            <AppLayout activeTab={activeTab} setActiveTab={() => {}}>
                 <div className="flex items-center justify-center h-64">
                     <Loader2 size={32} className="text-[var(--color-primary)] animate-spin" />
                 </div>
@@ -331,16 +338,44 @@ const AdminDashboard = () => {
     const clickableStyle = { position: 'relative', zIndex: 10, pointerEvents: 'all', cursor: 'pointer' };
 
     return (
-        <AppLayout activeTab={activeTab} setActiveTab={setActiveTab}>
+        <AppLayout activeTab={activeTab} setActiveTab={() => {}}>
             <AnimatePresence mode="wait">
                 {activeTab === 'analytics' && (
                     <motion.div key="analytics" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="space-y-6">
+                        {/* Welcome Hero Card */}
+                        <motion.div
+                            initial={{ opacity: 0, y: 12 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
+                            className="relative overflow-hidden rounded-[var(--radius-xl)] p-6 md:p-8 mb-6"
+                            style={{
+                                background: 'rgba(255,255,255,0.72)',
+                                backdropFilter: 'blur(24px) saturate(160%)',
+                                WebkitBackdropFilter: 'blur(24px) saturate(160%)',
+                                border: '1px solid rgba(255,255,255,0.65)',
+                                boxShadow: '0 8px 32px rgba(15,23,42,0.06), 0 0 0 1px rgba(255,255,255,0.5), inset 0 1px 0 rgba(255,255,255,0.7)',
+                            }}
+                        >
+                            <div className="absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-slate-700 via-slate-500 to-slate-800 opacity-60" />
+                            <div className="absolute -top-20 -right-20 w-60 h-60 rounded-full bg-gradient-to-br from-slate-400/[0.06] to-slate-500/[0.04] blur-3xl pointer-events-none" />
+                            <div className="relative z-10">
+                                <p className="text-[11px] font-bold text-slate-500/70 uppercase tracking-[0.15em] mb-1.5">
+                                    {new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
+                                </p>
+                                <h2 className="text-[26px] md:text-[30px] font-extrabold text-slate-800 tracking-tight leading-tight">
+                                    <span className="font-normal text-slate-400">{new Date().getHours() < 12 ? 'Good morning,' : new Date().getHours() < 18 ? 'Good afternoon,' : 'Good evening,'}</span>
+                                    <span className="bg-clip-text text-transparent bg-gradient-to-r from-slate-800 to-slate-600"> {currentUser?.name?.split(' ')[0]}</span>
+                                </h2>
+                                <p className="text-slate-400 text-[13px] mt-1.5 font-medium">Platform operations and administrative oversight.</p>
+                            </div>
+                        </motion.div>
+
                         {/* Stats Grid */}
                         <div className="grid grid-cols-2 lg:grid-cols-4 gap-6">
-                            <AdminTopCard title="Total Users" value={totalUsers || (data.users || []).length} icon={Users} gradient="from-blue-400 to-indigo-500" sparkline={[30, 45, 60, 40, 80, 55, 90]} />
-                            <AdminTopCard title="Patients" value={patients.length} icon={Users} gradient="from-emerald-400 to-teal-500" sparkline={[20, 50, 40, 70, 60, 85, 95]} />
-                            <AdminTopCard title="Doctors" value={approvedDoctors.length} icon={GraduationCap} gradient="from-amber-400 to-orange-500" sparkline={[10, 25, 20, 45, 40, 55, 65]} />
-                            <AdminTopCard title="Pharmacists" value={pharmacists.length} icon={Store} gradient="from-purple-400 to-fuchsia-500" sparkline={[5, 10, 15, 12, 20, 25, 30]} />
+                            <AdminTopCard title="Total Users" value={totalUsers || (data.users || []).length} icon={Users} gradient="from-[#3B82F6] to-[#6EA8FF]" sparkline={[30, 45, 60, 40, 80, 55, 90]} />
+                            <AdminTopCard title="Patients" value={patients.length} icon={Users} gradient="from-[#14B8A6] to-[#2DD4BF]" sparkline={[20, 50, 40, 70, 60, 85, 95]} />
+                            <AdminTopCard title="Doctors" value={approvedDoctors.length} icon={GraduationCap} gradient="from-[#7C5CFC] to-[#A855F7]" sparkline={[10, 25, 20, 45, 40, 55, 65]} />
+                            <AdminTopCard title="Pharmacists" value={pharmacists.length} icon={Store} gradient="from-[#FB7185] to-[#FF8FAB]" sparkline={[5, 10, 15, 12, 20, 25, 30]} />
                             <StatCard icon={Activity} label="Appointments" value={stats.totalAppointments || localAppointments.length} color="purple" />
                             <StatCard icon={Activity} label="Prescriptions" value={stats.totalPrescriptions || (data.prescriptions || []).length} color="amber" />
                             <StatCard icon={Activity} label="Orders" value={stats.totalOrders || (data.orders || []).length} color="emerald" />
@@ -368,8 +403,8 @@ const AdminDashboard = () => {
                                     <AreaChart data={chartDataGroups[graphMetric]} margin={{ top: 10, right: 10, left: -10, bottom: 0 }}>
                                         <defs>
                                             <linearGradient id="colorValue" x1="0" y1="0" x2="0" y2="1">
-                                                <stop offset="5%" stopColor={graphMetric === 'appointments' ? '#10b981' : graphMetric === 'newUsers' ? '#8b5cf6' : '#1a6fc4'} stopOpacity={0.3} />
-                                                <stop offset="95%" stopColor={graphMetric === 'appointments' ? '#10b981' : graphMetric === 'newUsers' ? '#8b5cf6' : '#1a6fc4'} stopOpacity={0.0} />
+                                                <stop offset="5%" stopColor={graphMetric === 'appointments' ? '#14B8A6' : graphMetric === 'newUsers' ? '#7C5CFC' : '#3B82F6'} stopOpacity={0.3} />
+                                                <stop offset="95%" stopColor={graphMetric === 'appointments' ? '#14B8A6' : graphMetric === 'newUsers' ? '#7C5CFC' : '#3B82F6'} stopOpacity={0.0} />
                                             </linearGradient>
                                         </defs>
                                         <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
@@ -390,7 +425,7 @@ const AdminDashboard = () => {
                                             animationDuration={1000}
                                             type="monotone"
                                             dataKey="value"
-                                            stroke={graphMetric === 'appointments' ? '#10b981' : graphMetric === 'newUsers' ? '#8b5cf6' : '#1a6fc4'}
+                                            stroke={graphMetric === 'appointments' ? '#14B8A6' : graphMetric === 'newUsers' ? '#7C5CFC' : '#3B82F6'}
                                             strokeWidth={3}
                                             fillOpacity={1}
                                             fill="url(#colorValue)"
@@ -529,10 +564,29 @@ const AdminDashboard = () => {
                 {activeTab === 'doctors' && (
                     <motion.div key="doctors" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="space-y-6">
                         <Card>
-                            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
-                                <h3 className="text-xl font-bold text-slate-800 tracking-tight flex items-center gap-2"><GraduationCap size={20} className="text-blue-500" /> Doctors Directory</h3>
-                                <input type="text" placeholder="Search doctors..." className="px-4 py-1.5 rounded-full border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)] w-full sm:w-64" value={localSearchQuery} onChange={(e) => setLocalSearchQuery(e.target.value)} />
-                            </div>
+                            {/* ═══ Unified Filter Toolbar ═══ */}
+                            <motion.div
+                                initial={{ opacity: 0, y: 12 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                transition={{ delay: 0.08, type: 'spring', stiffness: 340, damping: 28 }}
+                                className="mb-6"
+                                style={{
+                                    padding: '16px 20px',
+                                    borderRadius: '22px',
+                                    background: 'rgba(255,255,255,0.45)',
+                                    border: '1px solid rgba(255,255,255,0.4)',
+                                    boxShadow: '0 6px 20px rgba(15,23,42,0.04), inset 0 1px 0 rgba(255,255,255,0.4)',
+                                }}
+                            >
+                                <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+                                    <h3 className="text-lg font-bold text-slate-800 tracking-tight flex items-center gap-2 shrink-0"><GraduationCap size={18} className="text-blue-500" /> Doctors</h3>
+                                    <div className="hidden sm:block w-px h-6 bg-slate-200/50 shrink-0" />
+                                    <div className="relative w-full sm:w-[320px]">
+                                        <Search size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400/70" />
+                                        <input type="text" placeholder="Search doctors..." className="w-full pl-10 pr-4 bg-white/70 border border-slate-200/50 text-[13px] text-slate-700 placeholder:text-slate-400/60 outline-none focus:border-blue-300/50 focus:bg-white/90 focus:ring-2 focus:ring-blue-500/8 transition-all duration-200" style={{ borderRadius: '18px', height: '44px' }} value={localSearchQuery} onChange={(e) => setLocalSearchQuery(e.target.value)} />
+                                    </div>
+                                </div>
+                            </motion.div>
                             <div className="space-y-3">
                                 <AnimatePresence>
                                 {approvedDoctors.filter(d => d.name?.toLowerCase().includes(localSearchQuery.toLowerCase())).map(doc => (
@@ -584,10 +638,29 @@ const AdminDashboard = () => {
                 {activeTab === 'patients' && (
                     <motion.div key="patients" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="space-y-6">
                         <Card>
-                            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
-                                <h3 className="text-xl font-bold text-slate-800 tracking-tight flex items-center gap-2"><Users size={20} className="text-blue-500" /> Patients Database</h3>
-                                <input type="text" placeholder="Search patients..." className="px-4 py-1.5 rounded-full border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)] w-full sm:w-64" value={localSearchQuery} onChange={(e) => setLocalSearchQuery(e.target.value)} />
-                            </div>
+                            {/* ═══ Unified Filter Toolbar ═══ */}
+                            <motion.div
+                                initial={{ opacity: 0, y: 12 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                transition={{ delay: 0.08, type: 'spring', stiffness: 340, damping: 28 }}
+                                className="mb-6"
+                                style={{
+                                    padding: '16px 20px',
+                                    borderRadius: '22px',
+                                    background: 'rgba(255,255,255,0.45)',
+                                    border: '1px solid rgba(255,255,255,0.4)',
+                                    boxShadow: '0 6px 20px rgba(15,23,42,0.04), inset 0 1px 0 rgba(255,255,255,0.4)',
+                                }}
+                            >
+                                <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+                                    <h3 className="text-lg font-bold text-slate-800 tracking-tight flex items-center gap-2 shrink-0"><Users size={18} className="text-blue-500" /> Patients</h3>
+                                    <div className="hidden sm:block w-px h-6 bg-slate-200/50 shrink-0" />
+                                    <div className="relative w-full sm:w-[320px]">
+                                        <Search size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400/70" />
+                                        <input type="text" placeholder="Search patients..." className="w-full pl-10 pr-4 bg-white/70 border border-slate-200/50 text-[13px] text-slate-700 placeholder:text-slate-400/60 outline-none focus:border-blue-300/50 focus:bg-white/90 focus:ring-2 focus:ring-blue-500/8 transition-all duration-200" style={{ borderRadius: '18px', height: '44px' }} value={localSearchQuery} onChange={(e) => setLocalSearchQuery(e.target.value)} />
+                                    </div>
+                                </div>
+                            </motion.div>
                             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                                 <AnimatePresence>
                                 {patients.filter(p => (p.name || '').toLowerCase().includes(localSearchQuery.toLowerCase())).map(patient => (
@@ -622,10 +695,29 @@ const AdminDashboard = () => {
                 {activeTab === 'pharmacists' && (
                     <motion.div key="pharmacists" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="space-y-6">
                         <Card>
-                            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
-                                <h3 className="text-xl font-bold text-slate-800 tracking-tight flex items-center gap-2"><Store size={20} className="text-blue-500" /> Pharmacists & Pharmacies</h3>
-                                <input type="text" placeholder="Search pharmacists..." className="px-4 py-1.5 rounded-full border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)] w-full sm:w-64" value={localSearchQuery} onChange={(e) => setLocalSearchQuery(e.target.value)} />
-                            </div>
+                            {/* ═══ Unified Filter Toolbar ═══ */}
+                            <motion.div
+                                initial={{ opacity: 0, y: 12 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                transition={{ delay: 0.08, type: 'spring', stiffness: 340, damping: 28 }}
+                                className="mb-6"
+                                style={{
+                                    padding: '16px 20px',
+                                    borderRadius: '22px',
+                                    background: 'rgba(255,255,255,0.45)',
+                                    border: '1px solid rgba(255,255,255,0.4)',
+                                    boxShadow: '0 6px 20px rgba(15,23,42,0.04), inset 0 1px 0 rgba(255,255,255,0.4)',
+                                }}
+                            >
+                                <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+                                    <h3 className="text-lg font-bold text-slate-800 tracking-tight flex items-center gap-2 shrink-0"><Store size={18} className="text-blue-500" /> Pharmacists</h3>
+                                    <div className="hidden sm:block w-px h-6 bg-slate-200/50 shrink-0" />
+                                    <div className="relative w-full sm:w-[320px]">
+                                        <Search size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400/70" />
+                                        <input type="text" placeholder="Search pharmacists..." className="w-full pl-10 pr-4 bg-white/70 border border-slate-200/50 text-[13px] text-slate-700 placeholder:text-slate-400/60 outline-none focus:border-blue-300/50 focus:bg-white/90 focus:ring-2 focus:ring-blue-500/8 transition-all duration-200" style={{ borderRadius: '18px', height: '44px' }} value={localSearchQuery} onChange={(e) => setLocalSearchQuery(e.target.value)} />
+                                    </div>
+                                </div>
+                            </motion.div>
                             <div className="space-y-3">
                                 <AnimatePresence>
                                 {pharmacists.filter(p => (p.name || '').toLowerCase().includes(localSearchQuery.toLowerCase())).map(pharm => (
@@ -677,9 +769,9 @@ const AdminDashboard = () => {
                 {activeTab === 'settings' && (
                     <motion.div key="settings" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="space-y-6">
                         <Card className="flex flex-col items-center justify-center py-20 text-[var(--color-text-secondary)]">
-                            <Settings size={48} className="mb-4 text-[var(--color-primary)]/30 animate-[spin_6s_linear_infinite]" />
+                            <Settings size={48} className="mb-4 text-[var(--color-primary)]/30" />
                             <h3 className="text-xl font-semibold text-[var(--color-text-primary)] mb-2">Platform Configuration</h3>
-                            <p className="text-sm">Global configuration and module management coming soon.</p>
+                            <p className="text-sm">Use the Account Settings page from the profile menu to manage your preferences.</p>
                         </Card>
                     </motion.div>
                 )}
@@ -783,7 +875,7 @@ const AdminDashboard = () => {
                                                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
                                                 <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: '#94a3b8' }} />
                                                 <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: '#94a3b8' }} />
-                                                <Area type="monotone" dataKey="value" stroke="#1a6fc4" strokeWidth={2} fillOpacity={0.2} fill="#1a6fc4" />
+                                                <Area type="monotone" dataKey="value" stroke="#3B82F6" strokeWidth={2} fillOpacity={0.2} fill="#3B82F6" />
                                             </AreaChart>
                                         </ResponsiveContainer>
                                     </div>

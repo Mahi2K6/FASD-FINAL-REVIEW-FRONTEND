@@ -3,14 +3,13 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Bell, Menu, Search } from 'lucide-react';
 import { useAppContext } from '../../AppContext';
 import { useNavigate } from 'react-router-dom';
+import ProfileDropdown from '../ui/ProfileDropdown';
 
 const Navbar = ({ title, onMenuClick }) => {
     const { currentUser, data, updateData, logout } = useAppContext();
     const navigate = useNavigate();
     const [showNotifications, setShowNotifications] = useState(false);
-    const [showProfile, setShowProfile] = useState(false);
     const notifRef = useRef(null);
-    const profileRef = useRef(null);
 
     // Notifications
     const myNotifications = data?.notifications?.filter(
@@ -40,91 +39,92 @@ const Navbar = ({ title, onMenuClick }) => {
             if (notifRef.current && !notifRef.current.contains(e.target)) {
                 setShowNotifications(false);
             }
-            if (profileRef.current && !profileRef.current.contains(e.target)) {
-                setShowProfile(false);
-            }
         };
         document.addEventListener('mousedown', handleClickOutside);
         return () => document.removeEventListener('mousedown', handleClickOutside);
-    }, []);
-
-    const handleLogout = () => {
-        if (typeof logout === 'function') logout();
-        navigate('/login');
-    };
-
-    const userInitial = currentUser?.name?.charAt(0)?.toUpperCase() || 'U';
-
     return (
-        <header className="bg-white/50 backdrop-blur-xl border-b border-[rgba(26,111,196,0.06)] flex items-center justify-between px-6 py-4 shrink-0 relative z-20">
+        <header className="h-[64px] bg-white/70 backdrop-blur-2xl border-b border-[rgba(0,0,0,0.04)] flex items-center justify-between px-6 shrink-0 relative z-20 transition-all duration-300" style={{ boxShadow: '0 1px 3px rgba(0,0,0,0.02), inset 0 -1px 0 rgba(255,255,255,0.8)' }}>
             {/* Left: Hamburger */}
             <div className="flex items-center gap-3">
-                <button
+                <motion.button
+                    whileHover={{ scale: 1.05 }}
+                    whileTap={{ scale: 0.93 }}
                     onClick={onMenuClick}
-                    className="lg:hidden p-2 text-[var(--color-text-secondary)] hover:text-[var(--color-primary)] hover:bg-[var(--color-primary-light)] rounded-xl transition-all duration-200 ease-in-out"
+                    className="lg:hidden p-2 text-slate-400 hover:text-[var(--color-primary)] hover:bg-[var(--color-primary-light)] rounded-xl transition-all duration-150"
                 >
-                    <Menu size={20} />
-                </button>
+                    <Menu size={18} />
+                </motion.button>
             </div>
 
             {/* Right: Actions */}
-            <div className="flex items-center gap-4">
+            <div className="flex items-center gap-2.5">
                 {/* Notifications */}
                 <div ref={notifRef} className="relative">
-                    <button
-                        onClick={() => { setShowNotifications(!showNotifications); setShowProfile(false); }}
-                        className="relative p-2 text-[var(--color-text-secondary)] hover:text-[var(--color-primary)] hover:bg-[var(--color-primary-light)] rounded-xl transition-all duration-200 ease-in-out"
+                    <motion.button
+                        whileHover={{ scale: 1.08 }}
+                        whileTap={{ scale: 0.93 }}
+                        onClick={() => setShowNotifications(!showNotifications)}
+                        className="relative p-2.5 text-slate-400 hover:text-slate-600 hover:bg-slate-50/80 rounded-xl transition-all duration-200"
                     >
-                        <Bell size={20} />
+                        <Bell size={18} strokeWidth={1.8} />
                         {unreadCount > 0 && (
-                            <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full ring-2 ring-white" />
+                            <motion.span 
+                                initial={{ scale: 0 }}
+                                animate={{ scale: 1 }}
+                                className="absolute top-1.5 right-1.5 w-2.5 h-2.5 bg-gradient-to-r from-blue-500 to-cyan-500 rounded-full ring-[2.5px] ring-white breathe-glow" 
+                            />
                         )}
-                    </button>
+                    </motion.button>
 
                     <AnimatePresence>
                         {showNotifications && (
                             <motion.div
-                                initial={{ opacity: 0, y: 8, scale: 0.96 }}
+                                initial={{ opacity: 0, y: 6, scale: 0.97 }}
                                 animate={{ opacity: 1, y: 0, scale: 1 }}
-                                exit={{ opacity: 0, y: 8, scale: 0.96 }}
-                                transition={{ duration: 0.15 }}
-                                className="absolute right-0 mt-2 w-80 glass-card !rounded-[20px] !p-0 z-50 overflow-hidden"
+                                exit={{ opacity: 0, y: 6, scale: 0.97 }}
+                                transition={{ type: 'spring', stiffness: 450, damping: 30, mass: 0.7 }}
+                                className="absolute right-0 mt-2 w-80 bg-white/98 backdrop-blur-2xl border border-[rgba(0,0,0,0.06)] shadow-[var(--shadow-xl)] rounded-2xl overflow-hidden z-50"
                             >
-                                <div className="flex items-center justify-between px-4 py-3 border-b border-[rgba(26,111,196,0.08)]">
-                                    <h3 className="text-sm font-semibold text-[var(--color-text-primary)]">Notifications</h3>
+                                <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100/60">
+                                    <h3 className="text-[13px] font-semibold text-slate-800">Notifications</h3>
                                     {unreadCount > 0 && (
                                         <button
                                             onClick={handleMarkAllRead}
-                                            className="text-xs text-[var(--color-primary)] hover:text-[var(--color-primary-dark)] font-medium"
+                                            className="text-[10px] text-blue-600 hover:text-blue-700 font-semibold"
                                         >
                                             Mark all read
                                         </button>
                                     )}
                                 </div>
-                                <div className="max-h-72 overflow-y-auto">
+                                <div className="max-h-72 overflow-y-auto hide-scrollbar">
                                     {myNotifications.length === 0 ? (
-                                        <div className="px-4 py-8 text-center">
-                                            <Bell size={24} className="mx-auto text-[var(--color-primary)]/30 mb-2" />
-                                            <p className="text-sm text-[var(--color-text-secondary)]">No notifications yet</p>
+                                        <div className="px-4 py-10 text-center">
+                                            <div className="w-10 h-10 rounded-xl bg-slate-50 flex items-center justify-center mx-auto mb-2">
+                                                <Bell size={17} className="text-slate-300" />
+                                            </div>
+                                            <p className="text-xs font-medium text-slate-400">No notifications yet</p>
                                         </div>
                                     ) : (
-                                        myNotifications.map(notif => (
-                                            <div
+                                        myNotifications.map((notif, idx) => (
+                                            <motion.div
                                                 key={notif.id}
+                                                initial={{ opacity: 0, x: 8 }}
+                                                animate={{ opacity: 1, x: 0 }}
+                                                transition={{ delay: idx * 0.03 }}
                                                 onClick={() => handleMarkAsRead(notif.id)}
-                                                className={`px-4 py-3 border-b border-[rgba(26,111,196,0.04)] cursor-pointer hover:bg-[var(--color-primary-light)]/40 transition-colors ${!notif.read ? 'bg-[var(--color-primary-light)]/50' : ''}`}
+                                                className={`px-4 py-3 border-b border-slate-50 cursor-pointer hover:bg-slate-50/60 transition-colors ${!notif.read ? 'bg-blue-50/20' : ''}`}
                                             >
                                                 <div className="flex items-start justify-between gap-2">
                                                     <div className="flex-1 min-w-0">
-                                                        <p className={`text-sm font-medium truncate ${!notif.read ? 'text-[var(--color-text-primary)]' : 'text-[var(--color-text-secondary)]'}`}>
+                                                        <p className={`text-xs font-semibold truncate ${!notif.read ? 'text-slate-800' : 'text-slate-500'}`}>
                                                             {notif.title}
                                                         </p>
-                                                        <p className="text-xs text-[var(--color-text-secondary)] mt-0.5 line-clamp-2">{notif.message}</p>
+                                                        <p className="text-[11px] text-slate-400 mt-0.5 line-clamp-2 leading-relaxed">{notif.message}</p>
                                                     </div>
-                                                    {!notif.read && <div className="w-2 h-2 bg-[var(--color-primary)] rounded-full mt-1.5 shrink-0" />}
+                                                    {!notif.read && <div className="w-1.5 h-1.5 bg-blue-500 rounded-full mt-1 shrink-0" />}
                                                 </div>
-                                                <p className="text-[10px] text-[var(--color-text-secondary)]/60 mt-1">{notif.time}</p>
-                                            </div>
+                                                <p className="text-[9px] text-slate-300 mt-1 uppercase tracking-wider font-medium">{notif.time}</p>
+                                            </motion.div>
                                         ))
                                     )}
                                 </div>
@@ -133,58 +133,11 @@ const Navbar = ({ title, onMenuClick }) => {
                     </AnimatePresence>
                 </div>
 
-                {/* Profile */}
-                <div ref={profileRef} className="relative">
-                    <button
-                        onClick={() => { setShowProfile(!showProfile); setShowNotifications(false); }}
-                        className="flex items-center gap-2 p-1.5 hover:bg-[var(--color-primary-light)] rounded-xl transition-all duration-200 ease-in-out"
-                    >
-                        <div className="w-8 h-8 rounded-full bg-gradient-to-br from-[var(--color-primary)] to-[var(--color-primary-dark)] text-white flex items-center justify-center text-sm font-bold">
-                            {userInitial}
-                        </div>
-                        <div className="hidden md:block text-left">
-                            <p className="text-sm font-medium text-[var(--color-text-primary)] leading-none">{currentUser?.name || 'User'}</p>
-                            <p className="text-[11px] text-[var(--color-text-secondary)] capitalize leading-none mt-0.5">{currentUser?.role || 'user'}</p>
-                        </div>
-                    </button>
+                {/* Separator */}
+                <div className="w-px h-6 bg-slate-100 mx-0.5 hidden sm:block" />
 
-                    <AnimatePresence>
-                        {showProfile && (
-                            <motion.div
-                                initial={{ opacity: 0, y: 8, scale: 0.96 }}
-                                animate={{ opacity: 1, y: 0, scale: 1 }}
-                                exit={{ opacity: 0, y: 8, scale: 0.96 }}
-                                transition={{ duration: 0.15 }}
-                                className="absolute right-0 mt-2 w-56 glass-card !p-0 !rounded-[20px] z-50 py-2 overflow-hidden pointer-events-auto"
-                            >
-                                <div className="px-4 py-3 border-b border-[rgba(26,111,196,0.08)] mb-1">
-                                    <p className="text-sm font-semibold text-[var(--color-text-primary)]">{currentUser?.name}</p>
-                                    <p className="text-xs text-[var(--color-text-secondary)]">{currentUser?.email}</p>
-                                </div>
-                                <button
-                                    onClick={(e) => { e.stopPropagation(); navigate('/profile'); setShowProfile(false); }}
-                                    className="w-full px-4 py-2.5 text-sm text-[var(--color-text-primary)] hover:bg-[var(--color-primary-light)] text-left transition-colors"
-                                >
-                                    Profile
-                                </button>
-                                <button
-                                    onClick={(e) => { e.stopPropagation(); navigate('/settings'); setShowProfile(false); }}
-                                    className="w-full px-4 py-2.5 text-sm text-[var(--color-text-primary)] hover:bg-[var(--color-primary-light)] text-left transition-colors"
-                                >
-                                    Settings
-                                </button>
-                                <div className="border-t border-[rgba(26,111,196,0.08)] mt-1 pt-1">
-                                    <button
-                                        onClick={handleLogout}
-                                        className="w-full px-4 py-2.5 text-sm text-red-600 hover:bg-red-50 text-left transition-colors"
-                                    >
-                                        Log out
-                                    </button>
-                                </div>
-                            </motion.div>
-                        )}
-                    </AnimatePresence>
-                </div>
+                {/* Profile */}
+                <ProfileDropdown />
             </div>
         </header>
     );

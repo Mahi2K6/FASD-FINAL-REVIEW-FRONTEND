@@ -4,7 +4,7 @@ import { useToast } from './components/ui/ToastNotification';
 
 import API from './api';
 
-export const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8081'; 
+export const API_URL = import.meta.env.VITE_API_URL ? import.meta.env.VITE_API_URL.replace(/\/api\/?$/, '') : ''; 
 const AppContext = createContext();
 
 const initialData = {
@@ -191,10 +191,7 @@ export const AppProvider = ({ children }) => {
 
     const login = async (email, password) => {
         try {
-            console.log("login called with:", { email, password });
             const response = await API.post('/auth/login', { email, password });
-            console.log("login response.data:", response.data);
-            console.log("FULL response.data:", JSON.stringify(response.data));
 
             const { accessToken, token: rawToken, user } = response.data;
             const token = accessToken || rawToken;
@@ -263,7 +260,6 @@ export const AppProvider = ({ children }) => {
 
     const registerUser = async (userData) => {
         try {
-            console.log("registerUser called in AppContext with:", userData);
 
             // Build multipart/form-data payload for Spring Boot backend
             const fd = new FormData();
@@ -279,7 +275,6 @@ export const AppProvider = ({ children }) => {
             if (userData.idCard) fd.append('idCard', userData.idCard); // File object
 
             const response = await API.post('/auth/register', fd);
-            console.log("registerUser API response:", response);
             toast.success('Registration Sent', 'Your application is pending administrative review.');
             return { success: true };
         } catch (err) {

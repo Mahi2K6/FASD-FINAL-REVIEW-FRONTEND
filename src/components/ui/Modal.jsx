@@ -35,39 +35,43 @@ const Modal = ({ isOpen, onClose, title, children, size = 'md' }) => {
     return ReactDOM.createPortal(
         <AnimatePresence>
             {isOpen && (
-                <div className="fixed inset-0 z-[9999] flex items-center justify-center">
-                    {/* Backdrop */}
+                <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4">
+                    {/* Backdrop — premium frosted overlay */}
                     <motion.div
                         ref={overlayRef}
                         initial={{ opacity: 0 }}
                         animate={{ opacity: 1 }}
                         exit={{ opacity: 0 }}
-                        transition={{ duration: 0.2 }}
-                        className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm"
+                        transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
+                        className="absolute inset-0 bg-slate-900/40 backdrop-blur-xl"
+                        style={{ WebkitBackdropFilter: 'blur(16px)' }}
                         onClick={onClose}
                     />
-                    {/* Panel */}
+                    {/* Panel — glass card with spring entrance */}
                     <motion.div
-                        initial={{ opacity: 0, scale: 0.95 }}
-                        animate={{ opacity: 1, scale: 1 }}
-                        exit={{ opacity: 0, scale: 0.95 }}
-                        transition={{ duration: 0.2, ease: "easeOut" }}
-                        className={`relative bg-white rounded-2xl shadow-xl border border-[rgba(0,0,0,0.08)] w-full ${sizes[size]} mx-4 max-h-[85vh] overflow-hidden flex flex-col`}
+                        initial={{ opacity: 0, scale: 0.94, y: 16, filter: 'blur(4px)' }}
+                        animate={{ opacity: 1, scale: 1, y: 0, filter: 'blur(0px)' }}
+                        exit={{ opacity: 0, scale: 0.96, y: 8, filter: 'blur(2px)' }}
+                        transition={{ type: 'spring', stiffness: 420, damping: 32, mass: 0.7 }}
+                        className={`relative bg-white/96 backdrop-blur-2xl rounded-[var(--radius-3xl)] shadow-[var(--shadow-xl)] border border-white/70 w-full ${sizes[size]} mx-4 max-h-[85vh] overflow-hidden flex flex-col`}
                     >
                         {/* Header */}
                         {title && (
-                            <div className="px-6 pt-6 pb-4 border-b border-slate-100 relative">
-                                <h2 className="text-base font-semibold text-slate-800">{title}</h2>
-                                <button
+                            <div className="px-7 pt-6 pb-4 border-b border-slate-100/60 relative flex items-center justify-between">
+                                <h2 className="text-[17px] font-bold text-slate-800 tracking-tight">{title}</h2>
+                                <motion.button
+                                    whileHover={{ scale: 1.1, rotate: 90 }}
+                                    whileTap={{ scale: 0.9 }}
+                                    transition={{ type: 'spring', stiffness: 400, damping: 20 }}
                                     onClick={onClose}
-                                    className="absolute top-4 right-4 p-1.5 rounded-lg hover:bg-slate-100 text-slate-400 transition-colors"
+                                    className="p-2 rounded-xl hover:bg-slate-100 text-slate-400 hover:text-slate-600 transition-colors duration-150"
                                 >
-                                    <X size={18} />
-                                </button>
+                                    <X size={16} strokeWidth={2.2} />
+                                </motion.button>
                             </div>
                         )}
                         {/* Body */}
-                        <div className="flex-1 overflow-y-auto px-6 py-4">
+                        <div className="flex-1 overflow-y-auto px-7 py-5 hide-scrollbar">
                             {children}
                         </div>
                     </motion.div>

@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ShoppingBag, Search, Clock, Check, Package, Loader2, RefreshCw, Send, Activity, LayoutGrid, CheckCircle, Plus, Edit2, X, Save, AlertTriangle, Trash2 } from 'lucide-react';
 import { useAppContext } from '../../AppContext';
@@ -13,7 +14,13 @@ import Modal from '../../components/ui/Modal';
 import { useToast } from '../../components/ui/ToastNotification';
 
 const PharmacistDashboard = () => {
-    const [activeTab, setActiveTab] = useState('orders');
+    const location = useLocation();
+
+    // Derive activeTab from URL path — no more stale local state
+    const pathSegment = location.pathname.split('/').pop();
+    const activeTab = (['orders','inventory','history'].includes(pathSegment))
+        ? pathSegment
+        : 'orders';
     const { currentUser, data, updateData, logout, loadingDb } = useAppContext();
     const toast = useToast();
 
@@ -58,7 +65,7 @@ const PharmacistDashboard = () => {
 
     if (loadingDb || !currentUser || !data || !data.prescriptions) {
         return (
-            <AppLayout activeTab={activeTab} setActiveTab={setActiveTab}>
+            <AppLayout activeTab={activeTab} setActiveTab={() => {}}>
                 <div className="flex items-center justify-center h-64">
                     <Loader2 size={32} className="text-[var(--color-primary)] animate-spin" />
                 </div>
@@ -69,7 +76,7 @@ const PharmacistDashboard = () => {
     // Pending approval guard
     if (currentUser?.status === 'pending') {
         return (
-            <AppLayout activeTab={activeTab} setActiveTab={setActiveTab}>
+            <AppLayout activeTab={activeTab} setActiveTab={() => {}}>
                 <div className="flex items-center justify-center h-[60vh]">
                     <Card className="max-w-md text-center">
                         <div className="w-16 h-16 bg-amber-100 rounded-full flex items-center justify-center mx-auto mb-4">
@@ -111,8 +118,12 @@ const PharmacistDashboard = () => {
             p.id === rxId ? { ...p, status: 'ready' } : p
         );
         updateData('prescriptions', updated);
+        console.log("API Request:", { endpoint: `/prescriptions/${rxId}/notes`, method: 'PUT', payload: { notes: 'status:ready' } });
         API.put(`/prescriptions/${rxId}/notes`, { notes: 'status:ready' })
-          .catch(err => console.error('Mark ready error:', err));
+          .catch(err => {
+              console.error('Mark ready error:', err);
+              toast.error('Error', err.response?.data?.message || 'Failed to update prescription status.');
+          });
     };
 
     const handleMarkDispensed = (rxId) => {
@@ -120,8 +131,12 @@ const PharmacistDashboard = () => {
             p.id === rxId ? { ...p, status: 'dispensed' } : p
         );
         updateData('prescriptions', updated);
+        console.log("API Request:", { endpoint: `/prescriptions/${rxId}/notes`, method: 'PUT', payload: { notes: 'status:dispensed' } });
         API.put(`/prescriptions/${rxId}/notes`, { notes: 'status:dispensed' })
-          .catch(err => console.error('Mark dispensed error:', err));
+          .catch(err => {
+              console.error('Mark dispensed error:', err);
+              toast.error('Error', err.response?.data?.message || 'Failed to update prescription status.');
+          });
     };
 
     const renderMedicines = (meds) => {
@@ -147,6 +162,7 @@ const PharmacistDashboard = () => {
                 price: Number(editValues.price),
                 minThreshold: Number(editValues.minThreshold)
             };
+            console.log("API Request:", { endpoint: `/inventory/${id}`, method: 'PUT', payload: dataToUpdate });
             await API.put(`/inventory/${id}`, dataToUpdate);
             setEditingId(null);
             toast.success('Updated', 'Inventory updated successfully.');
@@ -162,6 +178,7 @@ const PharmacistDashboard = () => {
 
     const handleDeleteMedicine = async (id) => {
         try {
+            console.log("API Request:", { endpoint: `/inventory/${id}`, method: 'DELETE' });
             await API.delete(`/inventory/${id}`);
             toast.success('Deleted', 'Medicine removed from inventory.');
             setDeleteConfirm({ open: false, id: null, name: '' });
@@ -211,7 +228,11 @@ const PharmacistDashboard = () => {
             minThreshold: Number(newMedicine.minThreshold) || 10
         };
 
-        console.log('FINAL PAYLOAD:', JSON.stringify(payload));
+        console.log("API Request:", {
+            endpoint: '/inventory',
+            method: 'POST',
+            payload: payload
+        });
 
         setSubmitting(true);
         try {
@@ -236,13 +257,41 @@ const PharmacistDashboard = () => {
     };
 
     return (
-        <AppLayout activeTab={activeTab} setActiveTab={setActiveTab}>
+        <AppLayout activeTab={activeTab} setActiveTab={() => {}}>
+            {/* Welcome Hero Card */}
+            <motion.div
+                initial={{ opacity: 0, y: 12 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
+                className="relative overflow-hidden rounded-[var(--radius-xl)] p-6 md:p-8 mb-6"
+                style={{
+                    background: 'rgba(255,255,255,0.72)',
+                    backdropFilter: 'blur(24px) saturate(160%)',
+                    WebkitBackdropFilter: 'blur(24px) saturate(160%)',
+                    border: '1px solid rgba(255,255,255,0.65)',
+                    boxShadow: '0 8px 32px rgba(15,23,42,0.06), 0 0 0 1px rgba(255,255,255,0.5), inset 0 1px 0 rgba(255,255,255,0.7)',
+                }}
+            >
+                <div className="absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-purple-500 via-fuchsia-400 to-pink-500 opacity-60" />
+                <div className="absolute -top-20 -right-20 w-60 h-60 rounded-full bg-gradient-to-br from-purple-400/[0.06] to-fuchsia-400/[0.04] blur-3xl pointer-events-none" />
+                <div className="relative z-10">
+                    <p className="text-[11px] font-bold text-purple-500/70 uppercase tracking-[0.15em] mb-1.5">
+                        {new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
+                    </p>
+                    <h2 className="text-[26px] md:text-[30px] font-extrabold text-slate-800 tracking-tight leading-tight">
+                        <span className="font-normal text-slate-400">{new Date().getHours() < 12 ? 'Good morning,' : new Date().getHours() < 18 ? 'Good afternoon,' : 'Good evening,'}</span>
+                        <span className="bg-clip-text text-transparent bg-gradient-to-r from-slate-800 to-slate-600"> {currentUser?.name?.split(' ')[0]}</span>
+                    </h2>
+                    <p className="text-slate-400 text-[13px] mt-1.5 font-medium">Manage pharmacy inventory and process prescriptions.</p>
+                </div>
+            </motion.div>
+
             {/* ─── GLOBAL STATS ─── */}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-                <StatCard title="Total Medicines" value={totalMedicines} icon={Package} color="from-blue-500 to-indigo-600" />
-                <StatCard title="Low Stock ⚠️" value={lowStockCount} icon={AlertTriangle} color="from-rose-400 to-red-500" />
-                <StatCard title="Total Stock Value" value={`₹${totalValue.toLocaleString()}`} icon={Activity} color="from-emerald-400 to-teal-500" />
-                <StatCard title="Pending Rx" value={pendingPrescriptions.length} icon={Clock} color="from-amber-400 to-orange-500" />
+                <StatCard label="Total Medicines" value={totalMedicines} icon={Package} color="from-blue-500 to-indigo-600" />
+                <StatCard label="Low Stock ⚠️" value={lowStockCount} icon={AlertTriangle} color="from-rose-400 to-red-500" />
+                <StatCard label="Total Stock Value" value={`₹${totalValue.toLocaleString()}`} icon={Activity} color="from-emerald-400 to-teal-500" />
+                <StatCard label="Pending Rx" value={pendingPrescriptions.length} icon={Clock} color="from-amber-400 to-orange-500" />
             </div>
 
             <AnimatePresence mode="wait">

@@ -3,7 +3,11 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import LandingPage from './pages/Auth/LandingPage';
 import AuthPage from './pages/Auth/AuthPage';
 import DashboardRouter from './pages/Dashboard/DashboardRouter';
+import Checkout from './pages/Checkout/Checkout';
 import { useAppContext } from './AppContext';
+import PageLoaderTransition from './components/ui/PageLoaderTransition';
+
+const VideoCall = React.lazy(() => import('./pages/VideoCall/VideoCall'));
 
 const ProtectedRoute = ({ children }) => {
   const { currentUser } = useAppContext();
@@ -22,13 +26,44 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { useLocation } from 'react-router-dom';
 import GlobalFooter from './components/ui/GlobalFooter';
 
+// Premium page transition with blur-fade
+const pageTransitionVariants = {
+  initial: { 
+    opacity: 0, 
+    y: 12, 
+    filter: 'blur(8px)',
+    scale: 0.995 
+  },
+  animate: { 
+    opacity: 1, 
+    y: 0, 
+    filter: 'blur(0px)',
+    scale: 1,
+    transition: { 
+      duration: 0.5, 
+      ease: [0.22, 1, 0.36, 1],
+      staggerChildren: 0.04
+    }
+  },
+  exit: { 
+    opacity: 0, 
+    y: -6, 
+    filter: 'blur(4px)',
+    scale: 0.998,
+    transition: { 
+      duration: 0.2, 
+      ease: [0.4, 0, 1, 1] 
+    }
+  }
+};
+
 const PageTransition = ({ children }) => {
   return (
     <motion.div
-      initial={{ opacity: 0, y: 10 }}
-      animate={{ opacity: 1, y: 0 }}
-      exit={{ opacity: 0, y: -5 }}
-      transition={{ duration: 0.3, ease: "easeInOut" }}
+      variants={pageTransitionVariants}
+      initial="initial"
+      animate="animate"
+      exit="exit"
       className="w-full flex-1 flex flex-col"
     >
       {children}
@@ -71,7 +106,8 @@ const AnimatedRoutes = () => {
     "/doctor-dashboard",
     "/doctor-earnings",
     "/pharmacist-dashboard",
-    "/patient-dashboard"
+    "/patient-dashboard",
+    "/video-call"
   ];
 
   const shouldShowFooter = !hideFooterRoutes.some(route =>
@@ -81,12 +117,13 @@ const AnimatedRoutes = () => {
   return (
     <>
       <div className="flex-1 flex flex-col w-full">
-        <AnimatePresence mode="wait">
-          <Routes location={location} key={location.pathname}>
+        <AnimatePresence>
+          <Routes location={location} key={location.pathname.split('/').slice(0, 2).join('/')}>
             <Route path="/" element={<PageTransition><LandingPage /></PageTransition>} />
             <Route path="/login" element={<PageTransition><AuthPage defaultIsSignUp={false} /></PageTransition>} />
             <Route path="/register" element={<PageTransition><AuthPage defaultIsSignUp={true} /></PageTransition>} />
             <Route path="/auth" element={<PageTransition><AuthPage defaultIsSignUp={false} /></PageTransition>} />
+            <Route path="/checkout" element={<ProtectedRoute><PageTransition><Checkout /></PageTransition></ProtectedRoute>} />
             <Route path="/dashboard/*" element={
               <ProtectedRoute>
                 <PageTransition><DashboardRouter /></PageTransition>
@@ -127,6 +164,13 @@ const AnimatedRoutes = () => {
                 <PageTransition><DashboardRouter /></PageTransition>
               </ProtectedRoute>
             } />
+            <Route path="/video-call/:appointmentId" element={
+              <ProtectedRoute>
+                <React.Suspense fallback={<div className="fixed inset-0 bg-slate-900 flex items-center justify-center"><div className="w-10 h-10 border-2 border-slate-600 border-t-blue-400 rounded-full animate-spin" /></div>}>
+                  <VideoCall />
+                </React.Suspense>
+              </ProtectedRoute>
+            } />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </AnimatePresence>
@@ -139,6 +183,7 @@ const AnimatedRoutes = () => {
 function App() {
   return (
     <BrowserRouter>
+      <PageLoaderTransition />
       <AnimatedRoutes />
     </BrowserRouter>
   );

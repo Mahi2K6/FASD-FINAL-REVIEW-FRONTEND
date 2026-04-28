@@ -54,9 +54,9 @@ const LandingPage = () => {
     return (
         <div className="min-h-screen flex flex-col relative overflow-x-hidden font-sans" 
              style={{ 
-                 background: 'linear-gradient(135deg, #e8f1fb 0%, #f0f7ff 50%, #e0eeff 100%)',
+                 background: 'linear-gradient(145deg, #EBF2FA 0%, #F0F6FF 40%, #E8F0FB 70%, #EDF4FC 100%)',
                  backgroundSize: '200% 200%',
-                 animation: 'gradientMove 15s ease infinite'
+                 animation: 'gradientMove 20s ease infinite'
              }}>
             <TopNav />
 
@@ -111,7 +111,7 @@ const LandingPage = () => {
                                 initial={{ opacity: 0, y: 20 }}
                                 animate={{ opacity: 1, y: 0 }}
                                 transition={{ delay: 0.3, duration: 0.6 }}
-                                className="text-6xl md:text-8xl font-black text-[var(--color-text-primary)] tracking-tight leading-[1.1]"
+                                className="text-5xl md:text-7xl lg:text-8xl font-black text-[var(--color-text-primary)] tracking-[-0.03em] leading-[1.05]"
                             >
                                 Healthcare, <br />
                                 <span className="bg-gradient-to-r from-[var(--color-primary)] via-[var(--color-primary-dark)] to-[var(--color-primary)] bg-clip-text text-transparent bg-[length:200%_auto]">Connected Digitally</span>
@@ -121,7 +121,7 @@ const LandingPage = () => {
                                 initial={{ opacity: 0, y: 20 }}
                                 animate={{ opacity: 1, y: 0 }}
                                 transition={{ delay: 0.4, duration: 0.6 }}
-                                className="text-xl text-[var(--color-text-secondary)] leading-relaxed mb-12 max-w-lg font-medium"
+                                className="text-lg md:text-xl text-[var(--color-text-secondary)] leading-relaxed mb-12 max-w-lg font-medium"
                             >
                                 Experience the future of virtual healthcare with real-time doctor consultations, smart health monitoring, and secure digital prescriptions.
                             </motion.p>
@@ -134,7 +134,7 @@ const LandingPage = () => {
                             >
                                 <Link
                                     to="/auth"
-                                    className="group relative overflow-hidden rounded-full px-8 py-4 text-base font-semibold bg-gradient-to-r from-[var(--color-primary)] to-[var(--color-primary-dark)] text-white shadow-[0_8px_20px_rgba(26,111,196,0.25)] hover:shadow-[0_12px_25px_rgba(26,111,196,0.4)] hover:scale-[1.02] active:scale-95 transition-all duration-300 flex items-center justify-center gap-2"
+                                    className="group relative overflow-hidden rounded-full px-8 py-4 text-base font-semibold bg-gradient-to-r from-[var(--color-primary)] to-[var(--color-primary-dark)] text-white shadow-[0_6px_20px_rgba(26,111,196,0.2)] hover:shadow-[0_10px_30px_rgba(26,111,196,0.3)] hover:scale-[1.02] active:scale-[0.98] transition-all duration-300 flex items-center justify-center gap-2"
                                 >
                                     <span className="relative z-10 flex items-center gap-2">Get Started <ChevronRight size={18} className="group-hover:translate-x-1 transition-transform" /></span>
                                 </Link>
@@ -153,7 +153,7 @@ const LandingPage = () => {
                                 transition={{ delay: 0.7, duration: 0.8 }}
                                 className="mt-10 w-full max-w-2xl"
                             >
-                                <div className="grid grid-cols-1 sm:grid-cols-3 gap-8 glass-card !rounded-[2rem] !p-8 transition-all duration-500">
+                                <div className="grid grid-cols-1 sm:grid-cols-3 gap-8 glass-card !rounded-2xl !p-8 transition-all duration-500">
                                     <div className="flex flex-col items-center">
                                         <div className="w-10 h-10 rounded-full bg-[var(--color-primary-light)] flex items-center justify-center text-[var(--color-primary)] mb-4 border border-[rgba(26,111,196,0.12)] shadow-sm">
                                             <Stethoscope size={20} />
@@ -249,7 +249,7 @@ const LandingPage = () => {
                         transition={{ duration: 0.8 }}
                         className="text-center max-w-3xl mb-24"
                     >
-                        <h2 className="text-4xl md:text-5xl lg:text-6xl font-bold tracking-tight text-[var(--color-text-primary)] mb-8 font-sans">Powering Modern Care</h2>
+                        <h2 className="text-4xl md:text-5xl lg:text-6xl font-bold tracking-[-0.03em] text-[var(--color-text-primary)] mb-8 font-sans">Powering Modern Care</h2>
                         <p className="text-xl text-[var(--color-text-secondary)] leading-relaxed font-medium">
                             Everything you need to manage your health digitally, engineered into an elegant and fast platform.
                         </p>
@@ -282,9 +282,9 @@ const LandingPage = () => {
                                 whileInView={{ opacity: 1, y: 0 }}
                                 viewport={{ once: true, margin: "-50px" }}
                                 transition={{ duration: 0.6, delay: idx * 0.2 }}
-                                className={`flex flex-col items-start p-8 rounded-3xl glass-card hover:glass-card-hover hover:-translate-y-2 transition-all duration-300 w-full`}
+                                className={`flex flex-col items-start p-8 rounded-2xl glass-card hover:glass-card-hover hover:-translate-y-1 transition-all duration-300 w-full`}
                             >
-                                <div className={`w-16 h-16 rounded-2xl bg-[var(--color-primary-light)] flex items-center justify-center mb-6 shadow-inner border border-[rgba(26,111,196,0.1)]`}>
+                                <div className={`w-14 h-14 rounded-xl bg-[var(--color-primary-light)] flex items-center justify-center mb-6 shadow-inner border border-[rgba(26,111,196,0.08)]`}>
                                     {item.icon}
                                 </div>
                                 <h3 className="text-xl font-bold text-[var(--color-text-primary)] mb-3">{item.title}</h3>

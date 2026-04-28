@@ -68,13 +68,13 @@ const ToastItem = ({ id, type = 'info', title, message, duration = 4000, onDismi
             animate={{ opacity: 1, x: 0, scale: 1 }}
             exit={{ opacity: 0, x: 60, scale: 0.92, transition: { duration: 0.2 } }}
             transition={{ type: 'spring', stiffness: 380, damping: 30 }}
-            className={`relative w-80 max-w-[90vw] rounded-3xl border shadow-[0_8px_32px_rgba(0,0,0,0.12)] overflow-hidden pointer-events-auto
+            className={`relative w-80 max-w-[90vw] rounded-2xl border shadow-[var(--shadow-lg)] overflow-hidden pointer-events-auto
                 backdrop-filter backdrop-blur-[30px]
                 ${c.bg} ${c.border}`}
             style={{ WebkitBackdropFilter: 'blur(30px)' }}
         >
             {/* Glass shimmer overlay */}
-            <div className="absolute inset-0 pointer-events-none rounded-3xl"
+            <div className="absolute inset-0 pointer-events-none rounded-2xl"
                 style={{ background: 'linear-gradient(145deg, rgba(255,255,255,0.4), rgba(255,255,255,0.0))', opacity: 0.5 }}
             />
 
@@ -83,8 +83,8 @@ const ToastItem = ({ id, type = 'info', title, message, duration = 4000, onDismi
                     <Icon size={18} strokeWidth={2.5} />
                 </div>
                 <div className="flex-1 min-w-0">
-                    {title && <p className={`text-sm font-semibold leading-tight ${c.title}`}>{title}</p>}
-                    {message && <p className={`text-xs mt-0.5 leading-relaxed ${c.msg}`}>{message}</p>}
+                    {title && <p className={`text-sm font-semibold leading-tight ${c.title}`}>{typeof title === "object" ? JSON.stringify(title) : title}</p>}
+                    {message && <p className={`text-xs mt-0.5 leading-relaxed ${c.msg}`}>{typeof message === "object" ? JSON.stringify(message) : message}</p>}
                 </div>
             </div>
 
