@@ -3,6 +3,7 @@ import { useSocket } from './hooks/useSocket';
 import { useToast } from './components/ui/ToastNotification';
 
 import API from './api';
+import axios from 'axios';
 
 export const API_URL = import.meta.env.VITE_API_URL ? import.meta.env.VITE_API_URL.replace(/\/api\/?$/, '') : ''; 
 const AppContext = createContext();
@@ -139,32 +140,32 @@ export const AppProvider = ({ children }) => {
     useEffect(() => {
         if (currentUser?.id) {
             fetchData();
-            // connect(currentUser.id);
+            connect(currentUser.id);
         } else {
             setLoadingDb(false);
+            // disconnect();
         }
     }, [currentUser?.id, connect, fetchData]);
 
     // Real-time Listeners
     useEffect(() => {
-        // Disabled socket events while migrating
-        /*
-        const offNotification = on('notification:new', (notif) => {
-            toast.info(notif.title || 'New Notification', notif.message);
-            fetchData();
-        });
-
-        const offAptUpdate = on('appointment:statusChanged', (data) => {
-            toast.success('Appointment Update', `Your appointment status is now ${data.status}`);
+        if (!currentUser?.id) return;
+        
+        // Listen for new prescriptions or specific user notifications on the STOMP topic
+        const offUserTopic = on(`/topic/user-${currentUser.id}`, (data) => {
+            // Check if it's a notification, prescription, or appointment update
+            if (data.type === 'notification') {
+                toast.info(data.title || 'New Notification', data.message);
+            } else if (data.status) {
+                toast.success('Update Received', `Status is now ${data.status}`);
+            }
             fetchData();
         });
 
         return () => {
-            offNotification();
-            offAptUpdate();
+            offUserTopic();
         };
-        */
-    }, [on, toast, fetchData]);
+    }, [currentUser?.id, on, toast, fetchData]);
 
     // Polling for pending users
     useEffect(() => {
@@ -191,24 +192,35 @@ export const AppProvider = ({ children }) => {
 
     const login = async (email, password) => {
         try {
-            const response = await API.post('/auth/login', { email, password });
+            const baseURL = import.meta.env.VITE_API_URL || 'http://localhost:8081/api';
+            const response = await axios.post(`${baseURL}/auth/login`, {
+                email,
+                password
+            }, {
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                withCredentials: true
+            });
 
-            const { accessToken, token: rawToken, user } = response.data;
+            const { accessToken, token: rawToken, user } = response.data || {};
             const token = accessToken || rawToken;
 
-            // Store token FIRST so subsequent API calls can use it
-            if (token) {
-                localStorage.setItem('token', token);
-            } else {
-                console.warn('No token received from login response!');
+            if (!token || !user) {
+                return { success: false, error: 'Invalid response from server. Missing token or user data.' };
             }
+
+            // Store token FIRST so subsequent API calls can use it
+            localStorage.setItem('token', token);
 
             // Check account status before granting access
             const status = user.status?.toUpperCase();
             if (status === 'REJECTED') {
+                localStorage.removeItem('token');
                 return { success: false, error: 'Your account registration was declined.' };
             }
             if (status === 'PENDING') {
+                localStorage.removeItem('token');
                 return { success: false, error: 'Your account is pending admin approval.' };
             }
 
@@ -219,8 +231,34 @@ export const AppProvider = ({ children }) => {
             toast.success('Welcome Back', `Logged in as ${user.name}`);
             return { success: true, user };
         } catch (error) {
-            console.error("Login Error:", error);
-            const errMsg = error.response?.data?.message || error.response?.data?.error || 'Login failed';
+            console.error("Login Error Details:", error);
+            
+            // 1. Check for Network Errors (Backend Offline / CORS)
+            if (!error.response) {
+                 return { success: false, error: 'Network Error: Cannot connect to backend server. Is it running?' };
+            }
+
+            // 2. Extract error message robustly
+            let errMsg = 'Login failed.';
+            const resData = error.response.data;
+
+            if (typeof resData === 'string') {
+                errMsg = resData;
+            } else if (resData?.message) {
+                errMsg = resData.message;
+            } else if (resData?.error) {
+                errMsg = resData.error;
+            }
+
+            // 3. Catch specific backend crash traces (e.g. JWT secret byte error)
+            if (error.response.status >= 500) {
+                 if (errMsg.toLowerCase().includes('jwt') || errMsg.toLowerCase().includes('bytes')) {
+                      errMsg = `Backend JWT Configuration Error: ${errMsg}`;
+                 } else {
+                      errMsg = `Server Error (${error.response.status}): ${errMsg}`;
+                 }
+            }
+
             return { success: false, error: errMsg };
         }
     };
